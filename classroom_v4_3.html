@@ -7378,7 +7378,7 @@ mainLight.shadow.camera.top=22;mainLight.shadow.camera.bottom=-22;
 // 上午低角度窗光 → 桌椅长投影。柔度对齐"窗作为大面积漫射光源"的真实感：
 // radius 适度加大 → 半影柔和不刺硬；normalBias 收小 → 桌腿/椅腿投影紧贴地面接合
 // （消除"影子与物体脱开漂浮"的彼得潘假象，长投影下尤其明显）；bias 配套微调防自阴影噪点。
-mainLight.shadow.radius=5;mainLight.shadow.bias=-0.0006;mainLight.shadow.normalBias=0.022;
+mainLight.shadow.radius=3;mainLight.shadow.bias=-0.0004;mainLight.shadow.normalBias=0.018;
 scene.add(mainLight);scene.add(mainLight.target);
 
 // ── Dust particles (Tyndall effect) ──────────────────────────────────────────
@@ -7595,7 +7595,7 @@ function sync(){
   floorBounce.forEach(b => { b.intensity = floorI; b.color.copy(mainLight.color); });
   // 主光：透过半透帘布后变暗变柔（拉得越满越暗、阴影越软）
   mainLight.intensity = mi * (1 - 0.72 * cAmt);   // 透帘后主光大幅衰减
-  mainLight.shadow.radius = 5 + 11 * cAmt;
+  mainLight.shadow.radius = 3 + 11 * cAmt;   // base 5→3: firmer contact band when curtains open; still softens to 14 when fully drawn
   // 日间天光面光源：晨/午最亮、夜间(mi→0)≈0；随拉帘衰减(沿用 cDim 模式)；并取窗光色温。
   // daylightFactor = 当前窗光强度 mi / 正午参考值 1.8(PRESETS.noon.mInt 为最强日光)。
   const daylightFactor = Math.min(1, mi / 1.8);

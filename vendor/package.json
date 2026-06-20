@@ -1,0 +1,1 @@
+{"name":"three-vendor","private":true,"version":"1.0.0","dependencies":{"esbuild":"^0.21.5","three":"^0.164.1"}}

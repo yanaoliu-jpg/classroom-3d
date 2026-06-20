@@ -7360,7 +7360,7 @@ scene.add(ambientLight);
 
 // Hemisphere light — sky/ceiling bounce, intensity lerped in render loop for noon
 // 蓝天(顶)→暖地(底)的方向性补光，让阴影呈现真实的“天光蓝”
-const hemiLight = new THREE.HemisphereLight(0xbcdcff, 0xc8b898, 0.30);
+const hemiLight = new THREE.HemisphereLight(0xbcdcff, 0xd2bd97, 0.30); // groundColor 暖一档(c8b898→d2bd97)：更接近木地板/瓷砖的暖反弹色，补软桌底/下半墙
 scene.add(hemiLight);
 let hemiTarget = 0.18; // 给暗部一个天光底，自定义/起始也保持冷蓝补光
 let baseAmbient = 0.06; // 环境光"满光"基准；真实黑暗门控按总光量把它缩到 0（见 render loop envGate）
@@ -7588,10 +7588,10 @@ function sync(){
   const fillI = Math.min(0.6, mi * 0.20) * cDim * (0.45 + 0.55*interiorDim); // 窗光填充：清晨减半(近窗仍亮)
   windowFills.forEach(f => { f.intensity = fillI; f.color.copy(mainLight.color); });
   // 天花板反弹补光：跟随窗光强度与色温，近窗最亮、夜间(mi→0)自动熄灭；随拉帘压暗
-  const bounceI = Math.min(0.55, mi * 0.16) * cDim * interiorDim; // GI 反弹补光：清晨大幅压低
+  const bounceI = Math.min(0.66, mi * 0.20) * cDim * interiorDim; // GI 反弹补光适度增强(0.16→0.20)→吊顶暖反弹更自然；跟随 mi(窗光)→夜间 mi=0 自动熄灭
   ceilBounce.forEach(b => { b.intensity = bounceI; b.color.copy(mainLight.color); });
   // 地面反弹补光：跟随窗光强度与色温；随拉帘压暗
-  const floorI = Math.min(0.45, mi * 0.14) * cDim * interiorDim; // 地面反弹补光：清晨大幅压低
+  const floorI = Math.min(0.55, mi * 0.18) * cDim * interiorDim; // 地面→桌底反弹适度增强(0.14→0.18)→桌底/朝窗桌腿不发死；跟随 mi→夜间自动熄灭
   floorBounce.forEach(b => { b.intensity = floorI; b.color.copy(mainLight.color); });
   // 主光：透过半透帘布后变暗变柔（拉得越满越暗、阴影越软）
   mainLight.intensity = mi * (1 - 0.72 * cAmt);   // 透帘后主光大幅衰减
@@ -7671,7 +7671,7 @@ function applyPreset(k){
     ));
   }
   // Hemisphere bounce: strong at noon, off at night
-  hemiTarget = k==='noon' ? 0.11 : k==='morning' ? 0.022 : k==='dusk' ? 0.045 : 0.0; // 清晨大幅压低天光补光 → 暗室衬出明显光柱(丁达尔前提)
+  hemiTarget = k==='noon' ? 0.15 : k==='morning' ? 0.030 : k==='dusk' ? 0.060 : 0.0; // 天光间接补光适度上调(noon 0.11→0.15)→软化吊顶/上半墙/桌底；清晨仅微升(0.022→0.030)保丁达尔光柱；夜=0(再乘 envGate 双重门控)
   // 静态模式也压低基础环境光，夜间最暗；晨昏天光偏暖、正午偏冷蓝。
   baseAmbient = k==='night' ? 0.04 : k==='morning' ? 0.016 : 0.032; // 清晨环境光底量压到很低 → 远窗处沉入暗部，光柱才显著
   interiorDim = k==='morning' ? 0.4 : 1.0;  // 清晨大幅压低室内补光(GI 反弹/IBL)，只留窗光主导 → 光柱显著
@@ -8033,7 +8033,7 @@ if(driftOn){
   // 直射强时压低天光 → 暗部更暗、阴影更分明，突出"光与影"。
   const moonGlow = (1 - dayLit) * 0.05;                 // 夜晚保留极弱冷调月光环境，避免死黑或残留暖色
   // 正午直射被屋顶挡住→改由漫射天光把屋子照亮（亮而无影）；低太阳天光弱、让直射长影唱主角。
-  hemiTarget = Math.max(moonGlow, skyLevel * (0.18 + 0.42 * sunHeight01)); // 正午≈0.60、晨昏≈0.18×天光（压低，给阴影留对比）
+  hemiTarget = Math.max(moonGlow, skyLevel * (0.22 + 0.46 * sunHeight01)); // 间接天光补光适度上调(0.18+0.42→0.22+0.46)→软化吊顶/上半墙/暗角；仍乘 envGate(渲染循环)→夜间归零
   baseAmbient = 0.02 + skyLevel * (0.05 + 0.15 * sunHeight01);  // 正午≈0.22，晨昏≈0.07
   // 天光颜色：晨昏暖金、正午冷蓝、夜晚冷月白（warmK 夜间已为 0）
   hemiLight.color.setRGB(0.70 + warmK*0.30, 0.82 - warmK*0.06, 1.0 - warmK*0.52);

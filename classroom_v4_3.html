@@ -4549,6 +4549,7 @@ renderer.toneMappingExposure=0.50; // 曝光=全场是否过曝爆白的总开�
 renderer.outputColorSpace=THREE.SRGBColorSpace;  // r128→r164 迁移：替代已移除的 outputEncoding=sRGBEncoding
 renderer.domElement.style.zIndex='1';
 document.body.appendChild(renderer.domElement);
+THREE.RectAreaLightUniformsLib.init();           // 必须在创建任何 RectAreaLight 之前初始化一次
 
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x05050a);
@@ -5035,6 +5036,15 @@ winSpot.target.position.set(RW/2-3.0, 0.2, WIN_CZ-0.5);
 winSpot.castShadow = false;
 scene.add(winSpot); scene.add(winSpot.target);
 corrLeak.spot = { light: winSpot, max: 0.8 }; // 由 2.6 大幅降到 0.8：走廊灯不会在地面烧出死白大斑
+// 高窗的面光源(RectAreaLight)：白天柔和天光从右窗漫入(清晨/正午最强、夜间≈0)。
+// 这是「日间天光路径」(与夜间走廊漏光 winSpot/corrLeak 互补，后者只在室内暗时点亮)。
+// 仅影响 MeshStandard/MeshPhysical 材质；不投阴影。强度由 sync() 按 mInt(窗光强度)+窗帘 实时驱动。
+const RECT_MAX = 4.0; // 面光源满强度(noon、窗帘全开时)；过曝则下调到 2.5~3
+const rWin = new THREE.RectAreaLight(0xdfe8f5 /*偏冷天光; Task6 随 preset 调*/, 0.0, RWIN_W, WIN_YT - WIN_YB);
+rWin.position.set(RW/2 - 0.05, (WIN_YB + WIN_YT)/2, WIN_CZ); // 窗洞内侧
+rWin.lookAt(RW/2 - 2.0, (WIN_YB + WIN_YT)/2, WIN_CZ);        // 法线指向室内 -x
+scene.add(rWin);
+window.rWin = rWin;
 // 地面光斑(窗下斜投的亮带)
 // 地面光斑用径向渐变贴图(中间柔亮→边缘透明)，避免"平铺大块死白"；色调取冷中性、不纯白
 const corrPoolTex = (()=>{ const c=document.createElement('canvas'); c.width=c.height=128; const g=c.getContext('2d');
@@ -7586,6 +7596,13 @@ function sync(){
   // 主光：透过半透帘布后变暗变柔（拉得越满越暗、阴影越软）
   mainLight.intensity = mi * (1 - 0.72 * cAmt);   // 透帘后主光大幅衰减
   mainLight.shadow.radius = 5 + 11 * cAmt;
+  // 日间天光面光源：晨/午最亮、夜间(mi→0)≈0；随拉帘衰减(沿用 cDim 模式)；并取窗光色温。
+  // daylightFactor = 当前窗光强度 mi / 正午参考值 1.8(PRESETS.noon.mInt 为最强日光)。
+  const daylightFactor = Math.min(1, mi / 1.8);
+  if (typeof rWin !== 'undefined') {
+    rWin.intensity = RECT_MAX * daylightFactor * cDim;
+    rWin.color.copy(mainLight.color);
+  }
   document.getElementById('mIntv').textContent=mi.toFixed(2);
   document.getElementById('mTempv').textContent=tempLabel(mt);
   document.getElementById('mAnglev').textContent=angle+'°';

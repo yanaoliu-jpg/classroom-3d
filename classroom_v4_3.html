@@ -4537,8 +4537,8 @@ THREE.ColorManagement.enabled = true;
 const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
 // 超采样抗锯齿(SSAA)：>1 时以更高分辨率渲染再缩回，转动视角时边缘/高光闪烁明显减弱。
 // 若觉得掉帧/发烫，把 SUPERSAMPLE 调回 1.0；想更干净可调到 2.0（更吃显卡）。
-const SUPERSAMPLE = 1.5;
-const pixelRatioCap = ()=> Math.min(devicePixelRatio * SUPERSAMPLE, 4);
+const SUPERSAMPLE = 1.0;
+const pixelRatioCap = ()=> Math.min(devicePixelRatio * SUPERSAMPLE, 2);
 renderer.setSize(innerWidth,innerHeight);
 renderer.setPixelRatio(pixelRatioCap());
 renderer.useLegacyLights = false;                // Task6: 切换到物理正确灯光(光强单位=瓦特/坎德拉)；point/spot 需 ×π 补偿
@@ -4591,10 +4591,14 @@ const outputPass = new THREE.OutputPass();
 composer.addPass(renderPass);
 composer.addPass(outputPass);
 // ── GTAO (ground-truth ambient occlusion)：在 RenderPass 之后注入接触阴影 ──────
-const gtaoPass = new THREE.GTAOPass(scene, camera, innerWidth, innerHeight);
+// 性能：GTAO 以半分辨率计算 AO，再由 blendMaterial 经 UV 双线性上采样合成到全分辨率画面，
+// AO 是低频遮蔽信号，半分辨率几乎不可见劣化，却把 AO/降噪每像素开销降到 1/4。
+const GTAO_SCALE = 0.5;
+const gtaoSize = ()=> ({ w: Math.max(1, Math.round(innerWidth*GTAO_SCALE)), h: Math.max(1, Math.round(innerHeight*GTAO_SCALE)) });
+const gtaoPass = (()=>{ const s=gtaoSize(); return new THREE.GTAOPass(scene, camera, s.w, s.h); })();
 const gtaoParams = {
   radius: 0.35, distanceExponent: 1.0, thickness: 1.0, scale: 1.0,
-  samples: 16, distanceFallOff: 1.0, screenSpaceRadius: false,
+  samples: 8, distanceFallOff: 1.0, screenSpaceRadius: false,
 };
 gtaoPass.updateGtaoMaterial(gtaoParams);
 composer.insertPass(gtaoPass, 1); // RenderPass(0) 之后、OutputPass(末尾) 之前
@@ -7832,7 +7836,8 @@ window.addEventListener('resize',()=>{
   renderer.setPixelRatio(pixelRatioCap()); // 跟随 SUPERSAMPLE 超采样设置
   composer.setSize(innerWidth,innerHeight);
   composer.setPixelRatio(renderer.getPixelRatio());
-  gtaoPass.setSize(innerWidth,innerHeight);
+  { const s=gtaoSize(); gtaoPass.setSize(s.w,s.h); } // GTAO 保持半分辨率
+
 });
 
 // ── Film Grain ────────────────────────────────────────────────────────────────

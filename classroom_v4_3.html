@@ -4589,6 +4589,14 @@ const renderPass = new THREE.RenderPass(scene, camera);
 const outputPass = new THREE.OutputPass();
 composer.addPass(renderPass);
 composer.addPass(outputPass);
+// ── GTAO (ground-truth ambient occlusion)：在 RenderPass 之后注入接触阴影 ──────
+const gtaoPass = new THREE.GTAOPass(scene, camera, innerWidth, innerHeight);
+const gtaoParams = {
+  radius: 0.35, distanceExponent: 1.0, thickness: 1.0, scale: 1.0,
+  samples: 16, distanceFallOff: 1.0, screenSpaceRadius: false,
+};
+gtaoPass.updateGtaoMaterial(gtaoParams);
+composer.insertPass(gtaoPass, 1); // RenderPass(0) 之后、OutputPass(末尾) 之前
 let theta=-0.34,phi=0.055,camR=13.5; // 初始视角后移约两排桌椅(camR 9.5→13.5)，更靠后的整体取景
 let panX=0, panZ=0, panY=0;         // 注视点偏移：WASD 水平平移 / QE 垂直升降（相机绕可移动的目标环绕 → 自由漫游）
 const moveKeys=Object.create(null); // 当前按下的移动键集合
@@ -7807,6 +7815,7 @@ window.addEventListener('resize',()=>{
   renderer.setPixelRatio(pixelRatioCap()); // 跟随 SUPERSAMPLE 超采样设置
   composer.setSize(innerWidth,innerHeight);
   composer.setPixelRatio(renderer.getPixelRatio());
+  gtaoPass.setSize(innerWidth,innerHeight);
 });
 
 // ── Film Grain ────────────────────────────────────────────────────────────────

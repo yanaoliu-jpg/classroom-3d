@@ -4541,11 +4541,11 @@ const SUPERSAMPLE = 1.5;
 const pixelRatioCap = ()=> Math.min(devicePixelRatio * SUPERSAMPLE, 4);
 renderer.setSize(innerWidth,innerHeight);
 renderer.setPixelRatio(pixelRatioCap());
-renderer.useLegacyLights = true;                 // r128→r164 迁移：保留旧版灯光强度行为
+renderer.useLegacyLights = false;                // Task6: 切换到物理正确灯光(光强单位=瓦特/坎德拉)；point/spot 需 ×π 补偿
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure=0.50; // 曝光=全场是否过曝爆白的总开关：0.72原始→0.50。全角度扫描结果：0.55→17处白斑, 0.50→约10, 0.45→6(仅剩窗口本身+贴窗阳光带)。想更亮调高，想彻底无白调到0.45
+renderer.toneMappingExposure=1.5; // Task6: 切物理灯后场景偏暗，曝光 0.50→1.5 提亮到自然明亮(日间 meanLum≈45-60)；ACES 高光肩部仍压住爆白(全视角 clippedWhite≈0)；夜间仍低(~7)
 renderer.outputColorSpace=THREE.SRGBColorSpace;  // r128→r164 迁移：替代已移除的 outputEncoding=sRGBEncoding
 renderer.domElement.style.zIndex='1';
 document.body.appendChild(renderer.domElement);
@@ -5035,11 +5035,11 @@ winSpot.position.set(RW/2-0.10, (WIN_YB+WIN_YT)/2, WIN_CZ);
 winSpot.target.position.set(RW/2-3.0, 0.2, WIN_CZ-0.5);
 winSpot.castShadow = false;
 scene.add(winSpot); scene.add(winSpot.target);
-corrLeak.spot = { light: winSpot, max: 0.8 }; // 由 2.6 大幅降到 0.8：走廊灯不会在地面烧出死白大斑
+corrLeak.spot = { light: winSpot, max: 0.8 * Math.PI }; // 由 2.6 大幅降到 0.8：走廊灯不会在地面烧出死白大斑；Task6 ×π 补偿 SpotLight 物理单位
 // 高窗的面光源(RectAreaLight)：白天柔和天光从右窗漫入(清晨/正午最强、夜间≈0)。
 // 这是「日间天光路径」(与夜间走廊漏光 winSpot/corrLeak 互补，后者只在室内暗时点亮)。
 // 仅影响 MeshStandard/MeshPhysical 材质；不投阴影。强度由 sync() 按 mInt(窗光强度)+窗帘 实时驱动。
-const RECT_MAX = 4.0; // 面光源满强度(noon、窗帘全开时)；过曝则下调到 2.5~3
+const RECT_MAX = 6.0; // 面光源满强度(noon、窗帘全开时)；Task6 物理灯+提亮 4.0→6.0 让窗光更通透；过曝则下调
 const rWin = new THREE.RectAreaLight(0xdfe8f5 /*偏冷天光; Task6 随 preset 调*/, 0.0, RWIN_W, WIN_YT - WIN_YB);
 rWin.position.set(RW/2 - 0.05, (WIN_YB + WIN_YT)/2, WIN_CZ); // 窗洞内侧
 rWin.lookAt(RW/2 - 2.0, (WIN_YB + WIN_YT)/2, WIN_CZ);        // 法线指向室内 -x
@@ -6715,7 +6715,7 @@ function updateSunBeams(){
   const sunDir=_bUp.copy(mainLight.target.position).sub(mainLight.position).normalize(); // 光线传播方向
   const elevFactor=Math.max(0, 1-Math.abs(sunDir.y));           // 水平光→1, 顶光→0
   const mI=+document.getElementById('mInt').value;
-  const litAmt=Math.min(1, mI/1.8);
+  const litAmt=Math.min(1, mI/2.6); // Task6: 参考值随 noon mInt 1.8→2.6 更新
   const hardMul=document.getElementById('curtainOn').checked ? 0.10 : 1.0;
   // 光束强度按"太阳越低越强"的陡曲线；暗室里大幅提亮 → 清晨/黄昏明显成束
   const beamOp=2.7 * Math.pow(elevFactor,1.5) * litAmt * hardMul;
@@ -6741,7 +6741,7 @@ function updateWindowPatches(angleDeg, sunElev){
   // 窗在左墙、阳光始终从窗侧进入：可见度随方位平滑变化（偏东更强），并跟随窗光强度，
   // 但不再在默认角度硬归零，保证能看到阳光照进教室。
   const mInt = +document.getElementById('mInt').value;
-  const lightAmt = Math.min(1, mInt / 1.8);                          // 窗光强度 0..1
+  const lightAmt = Math.min(1, mInt / 2.6);                          // 窗光强度 0..1 (Task6: 参考值→2.6)
   const visibilityScale = Math.max(0.2, Math.min(1, (angleDeg + 75) / 110)) * lightAmt;
 
   // 拉帘 → 硬窗格地面光斑/丁达尔光柱几乎消失（直射被窗帘漫射成面光源）
@@ -7479,7 +7479,7 @@ moonLight.target.position.set(0, 0.5, 4);
 moonLight.castShadow = false;
 scene.add(moonLight); scene.add(moonLight.target);
 
-const FLOURO_MAX = 1.0;     // 亮度归一化参考（用于灯板自发光强度换算）
+const FLOURO_MAX = Math.PI; // 亮度归一化参考（用于灯板自发光强度换算）；Task6: 随 flouroTarget ×π 同步放大，保持 t01 归一化比例不变
 let flouroTarget = 0.9;     // 目标亮度（render loop 平滑趋近），由 syncCeiling 设定
 let ceilColor = new THREE.Color(0xf5f3ee); // 当前 LED 颜色，由色温滑块决定
 
@@ -7488,7 +7488,7 @@ function syncCeiling(){
   const on  = document.getElementById('ceilOn').checked;
   const bri = +document.getElementById('ceilInt').value;
   const ct  = +document.getElementById('ceilTemp').value;
-  flouroTarget = on ? bri : 0;
+  flouroTarget = on ? bri * Math.PI : 0; // Task6: physically-correct lights → ×π 补偿 PointLight 坎德拉单位变暗
   ceilColor.copy(tempToColorLED(ct));
   flouroLight1.color.copy(ceilColor);
   flouroLight2.color.copy(ceilColor);
@@ -7585,20 +7585,20 @@ function sync(){
   const cAmt = curtainAmt;
   const cDim = 1 - 0.88 * cAmt;   // 拉满后室内仅余~12%补光（午休真正变暗）
   // 窗口填充光：跟随窗光强度(mi)与太阳色温，夜间(mi→0)自动熄灭；并随拉帘压暗
-  const fillI = Math.min(0.6, mi * 0.20) * cDim * (0.45 + 0.55*interiorDim); // 窗光填充：清晨减半(近窗仍亮)
+  const fillI = Math.min(0.6, mi * 0.20) * Math.PI * cDim * (0.45 + 0.55*interiorDim); // 窗光填充：清晨减半(近窗仍亮)；Task6 ×π 补偿 SpotLight 物理单位
   windowFills.forEach(f => { f.intensity = fillI; f.color.copy(mainLight.color); });
   // 天花板反弹补光：跟随窗光强度与色温，近窗最亮、夜间(mi→0)自动熄灭；随拉帘压暗
-  const bounceI = Math.min(0.66, mi * 0.20) * cDim * interiorDim; // GI 反弹补光适度增强(0.16→0.20)→吊顶暖反弹更自然；跟随 mi(窗光)→夜间 mi=0 自动熄灭
+  const bounceI = Math.min(0.66, mi * 0.20) * Math.PI * cDim * interiorDim; // GI 反弹补光适度增强(0.16→0.20)→吊顶暖反弹更自然；跟随 mi(窗光)→夜间 mi=0 自动熄灭；Task6 ×π 补偿 SpotLight 物理单位
   ceilBounce.forEach(b => { b.intensity = bounceI; b.color.copy(mainLight.color); });
   // 地面反弹补光：跟随窗光强度与色温；随拉帘压暗
-  const floorI = Math.min(0.55, mi * 0.18) * cDim * interiorDim; // 地面→桌底反弹适度增强(0.14→0.18)→桌底/朝窗桌腿不发死；跟随 mi→夜间自动熄灭
+  const floorI = Math.min(0.55, mi * 0.18) * Math.PI * cDim * interiorDim; // 地面→桌底反弹适度增强(0.14→0.18)→桌底/朝窗桌腿不发死；跟随 mi→夜间自动熄灭；Task6 ×π 补偿 SpotLight 物理单位
   floorBounce.forEach(b => { b.intensity = floorI; b.color.copy(mainLight.color); });
   // 主光：透过半透帘布后变暗变柔（拉得越满越暗、阴影越软）
   mainLight.intensity = mi * (1 - 0.72 * cAmt);   // 透帘后主光大幅衰减
   mainLight.shadow.radius = 3 + 11 * cAmt;   // base 5→3: firmer contact band when curtains open; still softens to 14 when fully drawn
   // 日间天光面光源：晨/午最亮、夜间(mi→0)≈0；随拉帘衰减(沿用 cDim 模式)；并取窗光色温。
-  // daylightFactor = 当前窗光强度 mi / 正午参考值 1.8(PRESETS.noon.mInt 为最强日光)。
-  const daylightFactor = Math.min(1, mi / 1.8);
+  // daylightFactor = 当前窗光强度 mi / 正午参考值 2.6(PRESETS.noon.mInt 为最强日光)。
+  const daylightFactor = Math.min(1, mi / 2.6);
   if (typeof rWin !== 'undefined') {
     rWin.intensity = RECT_MAX * daylightFactor * cDim;
     rWin.color.copy(mainLight.color);
@@ -7620,9 +7620,9 @@ syncCorridor();
 
 // ── Presets ───────────────────────────────────────────────────────────────────
 const PRESETS={
-  morning:{ mInt:1.7,mBlur:5, mTemp:0.68,mAngle:-66, fOn:true, fInt:0.14,fTemp:0.32, rOn:true, rInt:0.28,rTemp:0.5,  rY:3.8, desc:'清晨第一束光，从东窗低斜入，长长的影子与光柱' },
-  noon:   { mInt:1.8,mBlur:5, mTemp:0.50,mAngle:0,   fOn:true, fInt:0.30,fTemp:0.44, rOn:true, rInt:0.45,rTemp:0.52, rY:4.2, desc:'正午顶光，太阳角度高，影子短而清晰，荧光灯与天光共存' },
-  dusk:   { mInt:1.5,mBlur:6, mTemp:0.82,mAngle:58,  fOn:true, fInt:0.12,fTemp:0.28, rOn:true, rInt:0.22,rTemp:0.45, rY:3.2, desc:'傍晚夕光，橙红色，把课桌染成金色' },
+  morning:{ mInt:2.3,mBlur:5, mTemp:0.68,mAngle:-66, fOn:true, fInt:0.14,fTemp:0.32, rOn:true, rInt:0.28,rTemp:0.5,  rY:3.8, desc:'清晨第一束光，从东窗低斜入，长长的影子与光柱' },
+  noon:   { mInt:2.6,mBlur:5, mTemp:0.50,mAngle:0,   fOn:true, fInt:0.30,fTemp:0.44, rOn:true, rInt:0.45,rTemp:0.52, rY:4.2, desc:'正午顶光，太阳角度高，影子短而清晰，荧光灯与天光共存' },
+  dusk:   { mInt:2.0,mBlur:6, mTemp:0.82,mAngle:58,  fOn:true, fInt:0.12,fTemp:0.28, rOn:true, rInt:0.22,rTemp:0.45, rY:3.2, desc:'傍晚夕光，橙红色，把课桌染成金色' },
   night:  { mInt:0.0,mBlur:8, mTemp:0.55,mAngle:-35, fOn:true, fInt:0.08,fTemp:0.22, rOn:true, rInt:0.35,rTemp:0.48, rY:4.0, desc:'深夜，只有走廊的灯透进来，教室空旷而安静' },
   custom: { mInt:1.8,mBlur:8, mTemp:0.65,mAngle:-35, fOn:true, fInt:0.18,fTemp:0.38, rOn:true, rInt:0.35,rTemp:0.55, rY:4.0, desc:'' },
 };
@@ -7671,9 +7671,9 @@ function applyPreset(k){
     ));
   }
   // Hemisphere bounce: strong at noon, off at night
-  hemiTarget = k==='noon' ? 0.15 : k==='morning' ? 0.030 : k==='dusk' ? 0.060 : 0.0; // 天光间接补光适度上调(noon 0.11→0.15)→软化吊顶/上半墙/桌底；清晨仅微升(0.022→0.030)保丁达尔光柱；夜=0(再乘 envGate 双重门控)
+  hemiTarget = k==='noon' ? 0.55 : k==='morning' ? 0.10 : k==='dusk' ? 0.18 : 0.0; // Task6: 物理灯+提亮，天光间接补光上调(noon→0.55 软化吊顶/上半墙/桌底，明亮通透)；清晨仍较低(→0.10)保丁达尔光柱；夜=0(再乘 envGate 双重门控)
   // 静态模式也压低基础环境光，夜间最暗；晨昏天光偏暖、正午偏冷蓝。
-  baseAmbient = k==='night' ? 0.04 : k==='morning' ? 0.016 : 0.032; // 清晨环境光底量压到很低 → 远窗处沉入暗部，光柱才显著
+  baseAmbient = k==='night' ? 0.04 : k==='morning' ? 0.028 : 0.075; // Task6: 日间环境光底量适度上调(→0.075)抬升暗角，airy 不murky；清晨仍低保光柱
   interiorDim = k==='morning' ? 0.4 : 1.0;  // 清晨大幅压低室内补光(GI 反弹/IBL)，只留窗光主导 → 光柱显著
   const hemiWarm = (k==='morning' || k==='dusk');
   hemiLight.color.setRGB(hemiWarm?1.0:0.74, hemiWarm?0.80:0.86, hemiWarm?0.56:1.0);
@@ -8149,11 +8149,11 @@ if(driftOn){
   // 不受此系数影响 → 关灯后它们仍照亮窗侧，仅"无方向均匀补光"被压暗，形成左亮右暗的渐变。
   const ceilFillTarget = document.getElementById('ceilOn').checked ? 1.0 : 0.22;
   ceilFill += (ceilFillTarget - ceilFill) * 0.08;
-  for(let i = 0; i < pbrMats.length; i++) pbrMats[i].envMapIntensity = envGate * (1 - 0.68 * curtainAmt) * (0.34 + 0.58 * ceilFill) * (0.5 + 0.5*interiorDim); // IBL 底量收低(对比↑/去塑料)；清晨再压一档衬光柱
+  for(let i = 0; i < pbrMats.length; i++) pbrMats[i].envMapIntensity = envGate * (1 - 0.68 * curtainAmt) * (0.50 + 0.62 * ceilFill) * (0.5 + 0.5*interiorDim); // Task6: IBL 底量上调(0.34→0.50)提亮日间漫反射、保持通透；清晨再压一档衬光柱
   ambientLight.intensity = baseAmbient * envGate * curtainDim * ceilFill;
   // 地板加色反光层随光照淡出：整体瓷砖高光跟 envGate、窗侧反射带专门跟窗光 → 无光时地板真正全黑
   floorMirrorMat.opacity    = 0.015 * envGate * curtainDim; // 0.030→0.015：加法叠层减半，避免在亮地面上再加白、把砖纹抹平成"整齐死白"
-  floorHighlightMat.opacity = 0.018 * Math.min(1, _winI / 1.8) * curtainDim; // 0.035→0.018：同上
+  floorHighlightMat.opacity = 0.018 * Math.min(1, _winI / 2.6) * curtainDim; // 0.035→0.018：同上 (Task6: 参考值→2.6)
 
   // Lerp hemisphere light (sky/ceiling bounce, strongest at noon)
   // 稍快跟随：暖调夕光能干净地过渡进冷调夜色，而非长时间残留暖黄。乘 envGate → 无光时天光也归零。
@@ -8177,7 +8177,7 @@ if(driftOn){
   // Lerp corridor light elements
   const corrLerp = 0.012;
   const corrCurrent = corridorLight.intensity;
-  const corrNew = corrCurrent + (corridorTarget * 0.55 - corrCurrent) * corrLerp;
+  const corrNew = corrCurrent + (corridorTarget * 0.55 * Math.PI - corrCurrent) * corrLerp; // Task6 ×π 补偿 PointLight 物理单位
   corridorLight.intensity = Math.max(0, corrNew);
   corridorElements.gap.opacity   = corridorElements.gap.opacity   + (corridorTarget * 0.70  - corridorElements.gap.opacity)   * corrLerp;
   corridorElements.spill.opacity = corridorElements.spill.opacity + (corridorTarget * 0.22 - corridorElements.spill.opacity) * corrLerp;
@@ -8208,7 +8208,7 @@ if(driftOn){
   // ── Dappled light animation — breeze effect ───────────────────────────────
   // Each patch drifts slightly and breathes in opacity to simulate leaves moving
   const mIntCur = +document.getElementById('mInt').value;
-  const dappleBase = Math.min(1.0, mIntCur / 1.8); // scale with main light intensity
+  const dappleBase = Math.min(1.0, mIntCur / 2.6); // scale with main light intensity (Task6: ref→2.6)
   dappleMeshes.forEach(({ mesh, mat: dm, baseX, baseZ, phase, speedX, speedZ, isWall }) => {
     const wind = Math.sin(t * 0.38 + phase) * 0.5 + Math.sin(t * 0.91 + phase * 1.7) * 0.25;
     const breathe = 0.82 + Math.sin(t * 0.55 + phase) * 0.10 + Math.sin(t * 1.3 + phase) * 0.06;

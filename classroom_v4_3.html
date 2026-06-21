@@ -224,7 +224,7 @@ input[type=range].r::-webkit-slider-thumb{-webkit-appearance:none;width:10px;hei
       <div class="ldot" id="cDot" style="background:#cfe2ff;box-shadow:0 0 5px rgba(207,226,255,.7)"></div>天花板灯 · Ceiling LED
       <div class="tog-row"><label for="ceilOn">开启</label><label class="tog"><input type="checkbox" id="ceilOn" checked><span class="togs"></span></label></div>
     </div>
-    <div class="row"><label>亮度</label><input type="range" class="b" id="ceilInt" min="0" max="1.5" value="0.9" step="0.05"><span class="val" id="ceilIntv">0.90</span></div>
+    <div class="row"><label>亮度</label><input type="range" class="b" id="ceilInt" min="0" max="2" value="0.9" step="0.05"><span class="val" id="ceilIntv">0.90</span></div>
     <div class="row"><label>色温</label><input type="range" class="b" id="ceilTemp" min="0" max="1" value="0.5" step="0.01"><span class="val" id="ceilTempv">白</span></div>
   </div>
   <!-- Corridor light -->
@@ -7424,10 +7424,10 @@ const dustBasePos = dustPos.slice();
 
 // ── Ceiling LED panel lights — 现代学校 LED 平板灯 ───────────────────────────
 // 中性偏冷白、瞬时点亮、无频闪。开关 / 亮度 / 色温由控制面板手动控制（唯一控制源）。
-const flouroLight1=new THREE.PointLight(0xf5f3ee,1.4,10,2);
+const flouroLight1=new THREE.PointLight(0xf5f3ee,1.4,16,2);
 flouroLight1.position.set(-2,RH-0.2,2);flouroLight1.castShadow=false;
 scene.add(flouroLight1);
-const flouroLight2=new THREE.PointLight(0xf5f3ee,1.4,10,2);
+const flouroLight2=new THREE.PointLight(0xf5f3ee,1.4,16,2);
 flouroLight2.position.set(2,RH-0.2,-4);flouroLight2.castShadow=false;
 scene.add(flouroLight2);
 // ── 窗口透射填充光（Stage 6 · GI 近似）─────────────────────────────────────────
@@ -7624,11 +7624,11 @@ syncCorridor();
 
 // ── Presets ───────────────────────────────────────────────────────────────────
 const PRESETS={
-  morning:{ mInt:2.3,mBlur:5, mTemp:0.68,mAngle:-66, fOn:true, fInt:0.14,fTemp:0.32, rOn:true, rInt:0.28,rTemp:0.5,  rY:3.8, desc:'清晨第一束光，从东窗低斜入，长长的影子与光柱' },
-  noon:   { mInt:2.6,mBlur:5, mTemp:0.50,mAngle:0,   fOn:true, fInt:0.30,fTemp:0.44, rOn:true, rInt:0.45,rTemp:0.52, rY:4.2, desc:'正午顶光，太阳角度高，影子短而清晰，荧光灯与天光共存' },
-  dusk:   { mInt:2.0,mBlur:6, mTemp:0.82,mAngle:58,  fOn:true, fInt:0.12,fTemp:0.28, rOn:true, rInt:0.22,rTemp:0.45, rY:3.2, desc:'傍晚夕光，橙红色，把课桌染成金色' },
+  morning:{ mInt:2.3,mBlur:5, mTemp:0.68,mAngle:-66, fOn:true, fInt:0.95,fTemp:0.32, rOn:true, rInt:0.28,rTemp:0.5,  rY:3.8, desc:'清晨第一束光，从东窗低斜入，长长的影子与光柱' },
+  noon:   { mInt:2.6,mBlur:5, mTemp:0.50,mAngle:0,   fOn:true, fInt:1.35,fTemp:0.44, rOn:true, rInt:0.45,rTemp:0.52, rY:4.2, desc:'正午顶光，太阳角度高，影子短而清晰，荧光灯与天光共存' },
+  dusk:   { mInt:2.0,mBlur:6, mTemp:0.82,mAngle:58,  fOn:true, fInt:1.05,fTemp:0.28, rOn:true, rInt:0.22,rTemp:0.45, rY:3.2, desc:'傍晚夕光，橙红色，把课桌染成金色' },
   night:  { mInt:0.0,mBlur:8, mTemp:0.55,mAngle:-35, fOn:true, fInt:0.08,fTemp:0.22, rOn:true, rInt:0.35,rTemp:0.48, rY:4.0, desc:'深夜，只有走廊的灯透进来，教室空旷而安静' },
-  custom: { mInt:1.8,mBlur:8, mTemp:0.65,mAngle:-35, fOn:true, fInt:0.18,fTemp:0.38, rOn:true, rInt:0.35,rTemp:0.55, rY:4.0, desc:'' },
+  custom: { mInt:1.8,mBlur:8, mTemp:0.65,mAngle:-35, fOn:true, fInt:0.80,fTemp:0.38, rOn:true, rInt:0.35,rTemp:0.55, rY:4.0, desc:'' },
 };
 const descEl=document.createElement('div');
 descEl.style.cssText='position:fixed;top:68px;left:50%;transform:translateX(-50%);font-family:monospace;font-size:9px;letter-spacing:.1em;color:rgba(255,255,255,.22);z-index:10;pointer-events:none;transition:opacity .6s;text-align:center;';
@@ -8154,15 +8154,20 @@ if(driftOn){
   // 不受此系数影响 → 关灯后它们仍照亮窗侧，仅"无方向均匀补光"被压暗，形成左亮右暗的渐变。
   const ceilFillTarget = document.getElementById('ceilOn').checked ? 1.0 : 0.22;
   ceilFill += (ceilFillTarget - ceilFill) * 0.08;
-  for(let i = 0; i < pbrMats.length; i++) pbrMats[i].envMapIntensity = envGate * (1 - 0.68 * curtainAmt) * (0.50 + 0.62 * ceilFill) * (0.5 + 0.5*interiorDim); // Task6: IBL 底量上调(0.34→0.50)提亮日间漫反射、保持通透；清晨再压一档衬光柱
-  ambientLight.intensity = baseAmbient * envGate * curtainDim * ceilFill;
+  // ceiling-brighten: 灯越亮 → 室内整体漫反射补光越强（模拟更亮的天花板灯具向全室散射的反弹光）。
+  // 由 flouroTarget(=bri×π) 归一化驱动；天花板灯关闭(flouroTarget→0)时 ceilBoost→1.0 不变，夜间不受影响。
+  // 仅平滑抬升均匀补光底量、不制造热点，让宽景（俯瞰）也能随灯变亮，而非只在灯下形成光斑。
+  const ceilBri = flouroLight1.intensity / Math.PI;      // 平滑跟随的当前灯亮度(≈slider bri)
+  const ceilBoost = 1 + 0.70 * Math.min(1, Math.max(0, ceilBri - 0.25)); // 0.25 以下不加成，1.0 时 +70%
+  for(let i = 0; i < pbrMats.length; i++) pbrMats[i].envMapIntensity = envGate * (1 - 0.68 * curtainAmt) * (0.50 + 0.62 * ceilFill) * ceilBoost * (0.5 + 0.5*interiorDim); // Task6: IBL 底量上调(0.34→0.50)提亮日间漫反射、保持通透；清晨再压一档衬光柱
+  ambientLight.intensity = baseAmbient * envGate * curtainDim * ceilFill * ceilBoost;
   // 地板加色反光层随光照淡出：整体瓷砖高光跟 envGate、窗侧反射带专门跟窗光 → 无光时地板真正全黑
   floorMirrorMat.opacity    = 0.015 * envGate * curtainDim; // 0.030→0.015：加法叠层减半，避免在亮地面上再加白、把砖纹抹平成"整齐死白"
   floorHighlightMat.opacity = 0.018 * Math.min(1, _winI / 2.6) * curtainDim; // 0.035→0.018：同上 (Task6: 参考值→2.6)
 
   // Lerp hemisphere light (sky/ceiling bounce, strongest at noon)
   // 稍快跟随：暖调夕光能干净地过渡进冷调夜色，而非长时间残留暖黄。乘 envGate → 无光时天光也归零。
-  hemiLight.intensity += (hemiTarget * envGate * curtainDim * ceilFill - hemiLight.intensity) * 0.04;
+  hemiLight.intensity += (hemiTarget * envGate * curtainDim * ceilFill * ceilBoost - hemiLight.intensity) * 0.04;
 
   // 夜间月光平滑跟随（漂移入夜渐显 / 静态 night 预设点亮，日间为 0）
   moonLight.intensity += (moonTarget - moonLight.intensity) * 0.04;

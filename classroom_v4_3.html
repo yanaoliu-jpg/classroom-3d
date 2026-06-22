@@ -7116,9 +7116,9 @@ const rowSpacing=2.0;
 const colX=[-6.10, -4.35,-3.10, -0.625,0.625, 3.10,4.35, 6.10];
 const startZ=-RD/2+6+5.0;
 
-const deskMat=mat(0x6a4e2a,0.62,0,deskTex,deskNormal,deskRough); // 清漆磨损：粗糙度变化打散木面统一高光
-const legMat2=mat(0x303030,0.75,0.2);
-const chairMat=mat(0x1a1a22,0.85);
+const deskMat=mat(0x8a6838,0.6,0,deskTex,deskNormal,deskRough); // 0x6a4e2a→0x8a6838：抬高木面反照率(原色近黑、线性≈0.08)，让桌面在物理光下有明暗渐变，不再死黑一片
+const legMat2=mat(0x3a3a3a,0.7,0.2);                            // 0x303030→0x3a3a3a：桌椅腿同步微抬，避免腿仍是纯黑细条
+const chairMat=mat(0x4a4a55,0.55);                              // 0x1a1a22→0x4a4a55、rough 0.85→0.55：椅子原色 sRGB(26,26,34) 线性仅≈0.01，受光只反射~1%→纯黑无立体感；抬反照率+降粗糙度给座面/靠背一点掠角高光，落出形体
 
 // 倒角几何体只建一次，20 套桌椅复用（省内存、稳定帧率）
 const deskGeo     = roundedBox(deskW, deskH, deskD, 0.014, 3);
@@ -7138,7 +7138,7 @@ const douBottomGeo=roundedBox(douW, 0.014, douD, 0.004, 1);
 const douBackGeo  =roundedBox(douW, douH, 0.014, 0.004, 1);
 const douSideGeo  =roundedBox(0.014, douH, douD, 0.004, 1);
 const douLipGeo   =roundedBox(douW, 0.045, 0.012, 0.004, 1); // 前下沿小挡条，挡书又不封口
-const douMat=mat(0x55401f,0.70,0,deskTex);   // 内壁略深于桌面，强化"格子"暗腔
+const douMat=mat(0x6a4f28,0.70,0,deskTex);   // 0x55401f→0x6a4f28：随桌面抬高，仍比桌面略深，保留"格子"暗腔但不再死黑
 
 // Seeded pseudo-random so scene looks the same every load
 function seededRand(seed){

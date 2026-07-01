@@ -4615,7 +4615,7 @@ function updateCam(){
 }
 updateCam();
 
-// ── WASD 漫游 + QE 升降：WASD 沿视线在水平面平移注视点；Q 上升 / E 下降 ──────────────
+// ── WASD 漫游 + QE 升降：WASD 沿视线在水平面平移注视点；Q 下降 / E 上升 ──────────────
 window.addEventListener('keydown',e=>{
   if(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
   const k=e.key.toLowerCase();
@@ -4638,10 +4638,10 @@ function applyMove(dt){
     panX=Math.max(-6, Math.min(6,  panX + dx/len*speed));   // 限制在房间内
     panZ=Math.max(-4, Math.min(12, panZ + dz/len*speed));
   }
-  // Q 上升 / E 下降（垂直升降注视点与相机）
+  // Q 下降 / E 上升（垂直升降注视点与相机）
   let dy=0;
-  if(moveKeys.q) dy+=1;
-  if(moveKeys.e) dy-=1;
+  if(moveKeys.q) dy-=1;
+  if(moveKeys.e) dy+=1;
   if(dy) panY=Math.max(-1.2, Math.min(2.2, panY + dy*speed));
   updateCam();
 }
@@ -4910,12 +4910,16 @@ scene.add(ceil);
 
 // Back wall (where blackboard is)
 const backWall=new THREE.Mesh(new THREE.PlaneGeometry(RW,RH),mat(0xf4f2ec,0.96,0,wallTex,wallNormal));
-backWall.position.set(0,RH/2,-RD/2+6);backWall.receiveShadow=true;scene.add(backWall);
+backWall.position.set(0,RH/2,-RD/2+6);backWall.receiveShadow=true;
+backWall.castShadow=true; backWall.material.shadowSide=THREE.DoubleSide; // 挡光：黑板墙(z=-5)现在阻挡低太阳穿墙照入 → 修复端墙漏光
+scene.add(backWall);
 
-// Front wall (behind camera, partial)
+// Front wall (student back, +Z end) — 挡光防止阳光从后面投进教室
 const frontWall=new THREE.Mesh(new THREE.PlaneGeometry(RW,RH),mat(0xf4f2ec,0.96,0,wallTex,wallNormal));
 frontWall.rotation.y=Math.PI;frontWall.position.set(0,RH/2,RD/2+6-4);
-frontWall.receiveShadow=true;scene.add(frontWall);
+frontWall.receiveShadow=true;
+frontWall.castShadow=true; frontWall.material.shadowSide=THREE.DoubleSide; // 挡光：学生后墙(z=13)现在阻挡阳光从教室后面穿墙投入 → 修复后端漏光(用户要求"后面加一堵墙")
+scene.add(frontWall);
 
 // Left wall (with windows)
 const leftWall=new THREE.Mesh(new THREE.PlaneGeometry(RD,RH),mat(0xf4f2ec,0.96,0,wallTex,wallNormal));
@@ -4951,7 +4955,9 @@ const RWALL_CZ = (RWALL_Z0+RWALL_Z1)/2;
   const rwMat = mat(0xf4f2ec,0.96,0,rTex,rNrm); rwMat.side = THREE.DoubleSide; // 双面：从走廊外侧看也是实墙，不再背面剔除而“穿墙”
   const rightWall = new THREE.Mesh(geo, rwMat);
   rightWall.rotation.y = -Math.PI/2; rightWall.position.set(RWALL_X, 0, 0);
-  rightWall.receiveShadow = true; scene.add(rightWall);
+  rightWall.receiveShadow = true;
+  rightWall.castShadow = true; rwMat.shadowSide = THREE.DoubleSide; // 挡光：右墙(带高窗洞)阻挡阳光从右侧穿墙，只留高窗透光 → 修复右端漏光
+  scene.add(rightWall);
   // 墙裙(护墙 + 踢脚线)：满宽，与其他墙一致（addWainscot 假设居中平面，此处单独按本墙局部坐标摆放）
   const DADO_TOP = 1.12, SKIRT_TOP = 0.12, dadoH = DADO_TOP - SKIRT_TOP;
   const dadoMat = mat(0xe7ddc6, 0.9, 0, wallTex); dadoMat.side = THREE.DoubleSide;
@@ -5168,66 +5174,39 @@ addWainscot(leftWall,  RD);
     add(new THREE.SphereGeometry(0.025,6,6), mat(0xcc4422,0.5), 5.5+ox, 1.5+oy, -RD/2+6.04);
   });
 
-  // ── 后墙中央板报（黑板正上方）──────────────────────────────────────────────
+  // ── 后墙中央 · 五星红旗（黑板上方、书写灯之上，不与灯冲突）──────────────────────
   {
-    const CBW = 6.0, CBH = 0.9; // 宽×高，横幅风格
-    const CBX = 0;              // 居中
-    const CBY = 2.7;            // 黑板顶(2.15)上方，距 3.5m 吊顶留白
-    const CBZ = -RD/2 + 6.06;  // 紧贴后墙
+    const CBW = 0.99, CBH = 0.66; // 国旗 3:2 比例
+    const CBX = 0;                // 居中
+    const CBY = 3.07;             // 书写灯(y≈2.6)之上、贴近吊顶(3.5)留白 → 不与书写灯冲突
+    const CBZ = -RD/2 + 6.06;     // 紧贴后墙
 
     function makeBackWallBoardTex() {
-      const W = 1200, H = 180;
+      // 五星红旗：红底 + 1 大 4 小金色五角星（左上角），小星各有一角指向大星中心
+      const W = 300, H = 200;
       const cv = document.createElement('canvas');
       cv.width = W; cv.height = H;
       const ctx = cv.getContext('2d');
-
-      // 底色：深蓝渐变
-      const bg = ctx.createLinearGradient(0, 0, W, H);
-      bg.addColorStop(0, '#0d2137'); bg.addColorStop(0.5, '#163456'); bg.addColorStop(1, '#0d2137');
-      ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-
-      // 顶底装饰线
-      ctx.fillStyle = '#e8b84b'; ctx.fillRect(0, 0, W, 5);
-      ctx.fillRect(0, H-5, W, 5);
-      // 左右竖线
-      ctx.fillRect(0, 0, 5, H); ctx.fillRect(W-5, 0, 5, H);
-
-      // 内框线
-      ctx.strokeStyle = 'rgba(232,184,75,0.5)'; ctx.lineWidth = 1.5;
-      ctx.strokeRect(14, 10, W-28, H-20);
-
-      // 主标题
-      ctx.fillStyle = '#ffd54f';
-      ctx.font = 'bold 52px "Microsoft YaHei", serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 8;
-      ctx.fillText('努力学习  超越自我  共创未来', W/2, H/2 - 12);
-      ctx.shadowBlur = 0;
-
-      // 副标题
-      ctx.fillStyle = 'rgba(255,255,255,0.75)';
-      ctx.font = '22px "Microsoft YaHei", sans-serif';
-      ctx.fillText('— 班级格言 —', W/2, H/2 + 38);
-
-      // 左右五角星装饰
-      [80, W-80].forEach(sx => {
-        ctx.fillStyle = '#ffd54f'; ctx.font = '32px sans-serif';
-        ctx.fillText('★', sx, H/2 - 10);
+      ctx.fillStyle = '#de2910'; ctx.fillRect(0, 0, W, H);     // 中国红
+      function star(cx, cy, r, rot){
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot);
+        ctx.beginPath();
+        for(let i=0;i<5;i++){
+          const a = -Math.PI/2 + i*2*Math.PI/5;
+          const x = Math.cos(a)*r, y = Math.sin(a)*r;
+          if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+          const a2 = a + Math.PI/5;                            // 内凹点
+          ctx.lineTo(Math.cos(a2)*r*0.382, Math.sin(a2)*r*0.382);
+        }
+        ctx.closePath(); ctx.fillStyle = '#ffde00'; ctx.fill(); ctx.restore();
+      }
+      const bcx = W*0.165, bcy = H*0.25, br = H*0.145;         // 大星（左上 1/4 区）
+      star(bcx, bcy, br, 0);
+      [[0.335,0.09],[0.415,0.175],[0.415,0.29],[0.335,0.375]].forEach(([fx,fy])=>{ // 4 小星
+        const sx=W*fx, sy=H*fy, sr=H*0.05;
+        star(sx, sy, sr, Math.atan2(bcy-sy, bcx-sx) + Math.PI/2);
       });
-      [120, W-120].forEach(sx => {
-        ctx.fillStyle = 'rgba(255,213,79,0.55)'; ctx.font = '20px sans-serif';
-        ctx.fillText('★', sx, H/2 + 28);
-      });
-
-      // 顶部小字：年级班级
-      ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.font = '14px sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText('初中三年级 (2) 班', 22, 26);
-      ctx.textAlign = 'right';
-      ctx.fillText(new Date().getFullYear() + ' — ' + (new Date().getFullYear()+1) + ' 学年', W-22, 26);
-
-      return new THREE.CanvasTexture(cv);
+      const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
     }
 
     const cbMesh = new THREE.Mesh(
@@ -5793,6 +5772,32 @@ add(new THREE.BoxGeometry(7.5,0.06,0.18),mat(0x504030,0.8),0,0.93,-RD/2+6.15);
   add(new THREE.CylinderGeometry(0.018,0.018,0.16,18),mat(c,0.9),x,0.97,-RD/2+6.18,0,0,Math.PI/2);
 });
 
+// ── 黑板书写灯：黑板上方的日光灯管 + 反光罩 + 支架，斜向下照亮板面（随吊顶灯开关/色温同步）──
+const BB_Z0 = -RD/2+6;             // 板墙 z=-5
+const BB_LW = 5.6;                 // 灯管长度（略窄于板宽 7.5）
+const BB_LY = 2.52;                // 板顶 2.15 之上
+const BB_LZ = BB_Z0 + 0.42;        // 前探出墙 ~0.42m
+const bbHoodMat = new THREE.MeshStandardMaterial({ color:0xd6d9de, roughness:0.45, metalness:0.35 });
+// 反光罩（斜朝下前方，罩住灯管，把光引向板面）
+const bbHood = new THREE.Mesh(new THREE.BoxGeometry(BB_LW+0.24, 0.11, 0.24), bbHoodMat);
+bbHood.position.set(0, BB_LY+0.085, BB_LZ-0.05); bbHood.rotation.x = 0.55; bbHood.castShadow = true;
+scene.add(bbHood);
+// 灯管（自发光，横向沿 X）
+const bbTubeMat = new THREE.MeshStandardMaterial({ color:0xeef0f4, emissive:new THREE.Color(0xf2f5ff), emissiveIntensity:0.0, roughness:0.3 });
+const bbTube = new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,BB_LW,16), bbTubeMat);
+bbTube.rotation.z = Math.PI/2; bbTube.position.set(0, BB_LY, BB_LZ);
+scene.add(bbTube);
+// 两端支架（连墙）
+[-BB_LW/2-0.06, BB_LW/2+0.06].forEach(bx=>{
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.045,0.05,0.58), bbHoodMat);
+  arm.position.set(bx, BB_LY+0.06, BB_Z0+0.24); arm.rotation.x = 0.16; scene.add(arm);
+});
+// 照亮黑板的面光源（RectAreaLight，朝板面，强度随吊顶灯 render loop 驱动）
+const bbLight = new THREE.RectAreaLight(0xf4f6ff, 0.0, BB_LW, 0.9);
+bbLight.position.set(0, BB_LY-0.03, BB_LZ);
+bbLight.lookAt(0, 1.45, BB_Z0+0.03);   // 指向板面中心（略朝下）
+scene.add(bbLight);
+
 // ── 电子大屏（黑板右半改为液晶显示屏 / 班班通）────────────────────────────────
 {
   const zb = -RD/2 + 6.06;                 // 黑板面 z
@@ -6322,7 +6327,7 @@ const skyGlows=[]; // track for dynamic sky color during drift
 const extMats=[];  // 窗外景物材质：随昼夜整体明暗（夜晚压暗，避免窗户一直发亮）
 
 // 窗户尺寸
-const WIN_W = 1.9;  // 总宽
+const WIN_W = 2.7;  // 总宽（1.9→2.7 加宽窗户，采光更大；窗心间距 4，加宽后窗洞仍不重叠，窗间墙垛约 1.3m。所有窗框/玻璃/窗帘/遮光板缺口都按此常量联动）
 const WIN_H = 1.9;  // 总高（真实教室窗 ~1.8-2.0m）
 const WIN_BOTTOM = 0.9; // 窗台高度（真实 ~0.9m，略高于课桌）
 const WIN_TOP = WIN_BOTTOM + WIN_H; // 顶部高度 = 2.8（距 3.5m 吊顶 0.7m）
@@ -6990,7 +6995,7 @@ const TUBES_PER_FIXT  = 2;     // 每组灯具灯管数（2~3）
 const TUBE_GAP        = 0.16;  // 相邻灯管间距
 const HOUSING_W       = TUBE_GAP * (TUBES_PER_FIXT - 1) + 0.18;
 
-[-2, 2].forEach(row => {
+[-4, 0, 4].forEach(row => {   // 2 列(-2,2) → 3 列(-4,0,4)：左/中/右三列天花板灯，均匀铺满教室
   [-5, -1, 3, 7].forEach(z => {
     const posZ = -RD/2+6+RD/2+z-3;
 
@@ -7429,6 +7434,7 @@ const dustMat = new THREE.PointsMaterial({
   sizeAttenuation: true,
 });
 const dustParticles = new THREE.Points(dustGeo, dustMat);
+dustParticles.visible = false;   // 移除教室空中悬浮的尘埃光粒（丁达尔尘埃）——按需可改回 true
 scene.add(dustParticles);
 // Store original positions for drift
 const dustBasePos = dustPos.slice();
@@ -7436,12 +7442,16 @@ const dustBasePos = dustPos.slice();
 
 // ── Ceiling LED panel lights — 现代学校 LED 平板灯 ───────────────────────────
 // 中性偏冷白、瞬时点亮、无频闪。开关 / 亮度 / 色温由控制面板手动控制（唯一控制源）。
+// 三列天花板灯对应 3 盏 PointLight（左/中/右），沿 x=[-4,0,4]、z 错开覆盖全室
 const flouroLight1=new THREE.PointLight(0xf5f3ee,1.4,16,2);
-flouroLight1.position.set(-2,RH-0.2,2);flouroLight1.castShadow=false;
+flouroLight1.position.set(-4,RH-0.2,1);flouroLight1.castShadow=false;
 scene.add(flouroLight1);
 const flouroLight2=new THREE.PointLight(0xf5f3ee,1.4,16,2);
-flouroLight2.position.set(2,RH-0.2,-4);flouroLight2.castShadow=false;
+flouroLight2.position.set(4,RH-0.2,3);flouroLight2.castShadow=false;
 scene.add(flouroLight2);
+const flouroLight3=new THREE.PointLight(0xf5f3ee,1.4,16,2);
+flouroLight3.position.set(0,RH-0.2,5);flouroLight3.castShadow=false;
+scene.add(flouroLight3);
 // ── 窗口透射填充光（Stage 6 · GI 近似）─────────────────────────────────────────
 // 每扇窗一盏柔和 SpotLight，从窗口斜射入室，模拟阳光穿过玻璃后在室内的散射光晕。
 // 不投影（castShadow=false，省性能、不与主光阴影打架）；decay=2 物理平方衰减 → 近窗亮、远处暗。
@@ -7508,6 +7518,7 @@ function syncCeiling(){
   ceilColor.copy(tempToColorLED(ct));
   flouroLight1.color.copy(ceilColor);
   flouroLight2.color.copy(ceilColor);
+  flouroLight3.color.copy(ceilColor);
   const cd = document.getElementById('cDot');
   cd.style.opacity = on ? '1' : '0.3';
   cd.style.background = '#'+ceilColor.getHexString();
@@ -7636,9 +7647,9 @@ syncCorridor();
 
 // ── Presets ───────────────────────────────────────────────────────────────────
 const PRESETS={
-  morning:{ mInt:2.3,mBlur:5, mTemp:0.68,mAngle:-66, fOn:true, fInt:0.95,fTemp:0.32, rOn:true, rInt:0.28,rTemp:0.5,  rY:3.8, desc:'清晨第一束光，从东窗低斜入，长长的影子与光柱' },
-  noon:   { mInt:2.6,mBlur:5, mTemp:0.50,mAngle:0,   fOn:true, fInt:1.35,fTemp:0.44, rOn:true, rInt:0.45,rTemp:0.52, rY:4.2, desc:'正午顶光，太阳角度高，影子短而清晰，荧光灯与天光共存' },
-  dusk:   { mInt:2.0,mBlur:6, mTemp:0.82,mAngle:58,  fOn:true, fInt:1.05,fTemp:0.28, rOn:true, rInt:0.22,rTemp:0.45, rY:3.2, desc:'傍晚夕光，橙红色，把课桌染成金色' },
+  morning:{ mInt:3.0,mBlur:5, mTemp:0.68,mAngle:-66, fOn:true, fInt:0.95,fTemp:0.32, rOn:true, rInt:0.28,rTemp:0.5,  rY:3.8, desc:'清晨第一束光，从东窗低斜入，长长的影子与光柱' }, // mInt 2.3→3.0 提亮太阳
+  noon:   { mInt:3.2,mBlur:5, mTemp:0.50,mAngle:0,   fOn:true, fInt:1.35,fTemp:0.44, rOn:true, rInt:0.45,rTemp:0.52, rY:4.2, desc:'正午顶光，太阳角度高，影子短而清晰，荧光灯与天光共存' }, // mInt 2.6→3.2 提亮太阳
+  dusk:   { mInt:2.6,mBlur:6, mTemp:0.82,mAngle:58,  fOn:true, fInt:1.05,fTemp:0.28, rOn:true, rInt:0.22,rTemp:0.45, rY:3.2, desc:'傍晚夕光，橙红色，把课桌染成金色' }, // mInt 2.0→2.6 提亮太阳
   night:  { mInt:0.0,mBlur:8, mTemp:0.55,mAngle:-35, fOn:true, fInt:0.08,fTemp:0.22, rOn:true, rInt:0.35,rTemp:0.48, rY:4.0, desc:'深夜，只有走廊的灯透进来，教室空旷而安静' },
   custom: { mInt:1.8,mBlur:8, mTemp:0.65,mAngle:-35, fOn:true, fInt:0.80,fTemp:0.38, rOn:true, rInt:0.35,rTemp:0.55, rY:4.0, desc:'' },
 };
@@ -8151,6 +8162,7 @@ if(driftOn){
   const flouroLerp = 0.16;
   flouroLight1.intensity += (flouroTarget - flouroLight1.intensity) * flouroLerp;
   flouroLight2.intensity += (flouroTarget - flouroLight2.intensity) * flouroLerp;
+  flouroLight3.intensity += (flouroTarget - flouroLight3.intensity) * flouroLerp;
 
   // ── 真实黑暗门控 ──────────────────────────────────────────────────────────────
   // "没光源仍发灰"的根因：scene.environment(IBL) 给所有 PBR 材质漫射补光 + AmbientLight/
@@ -8198,6 +8210,11 @@ if(driftOn){
     // 光晕平面随亮度变化
     const glowOp = t01 * 0.26;
     fluoroGlows.forEach(g => { g.material.color.copy(ceilColor); g.material.opacity = glowOp; });
+    // 黑板书写灯跟随吊顶灯（同一 t01：开灯时亮、随色温）
+    bbTubeMat.emissive.copy(ceilColor);
+    bbTubeMat.emissiveIntensity = t01 * 2.0;
+    bbLight.color.copy(ceilColor);
+    bbLight.intensity = t01 * 3.4;
   }
 
   // Lerp corridor light elements

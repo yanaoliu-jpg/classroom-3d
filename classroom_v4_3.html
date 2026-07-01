@@ -4819,7 +4819,7 @@ function addContactShadow(x,z,w,d,rot=0){
 const RW=14, RD=22, RH=3.5; // room width, depth, height（真实教室层高；墙体/吊顶/灯具/遮光体均由 RH 联动）
 
 // Floor
-const floor=new THREE.Mesh(new THREE.PlaneGeometry(RW,RD),mat(0xd5cfc2,0.50,0.02,floorTex,floorNormal,floorRough)); // 0xf2efe6→0xd5cfc2：地砖反照率从近白(0.95)降到现实瓷砖(~0.81)，强窗光下不再整片爆成死白、保留砖缝纹理
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(RW,RD),mat(0xaaa69b,0.50,0.02,floorTex,floorNormal,floorRough)); // 0xd5cfc2→0xaaa69b(×0.8)：地砖反照率再下调，让强阳光照亮区也保留砖缝、不冲成"死白"(真机偏亮，原 0.81 在阳光下爆白)；可运行时按 - / = 微调
 floor.rotation.x=-Math.PI/2;floor.position.set(0,0,-RD/2+6);
 floor.receiveShadow=true;scene.add(floor);
 
@@ -4984,9 +4984,9 @@ function corrGlowMat(color, baseEmis, emisMax){
 const corrFloorMat = corrGlowMat(0xb7b1a4, 0.04, 0.42);
 const corrCeilMat  = corrGlowMat(0xeef0ea, 0.05, 0.70);
 const corrWallMat  = corrGlowMat(0xdadfd4, 0.04, 0.58);
-(()=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(CORR_LEN, CORR_D), corrFloorMat);
+(()=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(CORR_D, CORR_LEN), corrFloorMat);  // 修复：宽高写反了——原(CORR_LEN,CORR_D)使走廊地面变成 14宽(X)×1.9(Z) 横跨整个房间+伸出室外，被太阳直射成"发白大平面"(室外低角度可见)；正确为 1.9宽(X)×14长(Z) 的走廊条
   m.rotation.x=-Math.PI/2; m.position.set(CORR_CX, 0.0, CORR_CZ); scene.add(m); })();            // 地面
-(()=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(CORR_LEN, CORR_D), corrCeilMat);
+(()=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(CORR_D, CORR_LEN), corrCeilMat);  // 同上修复：走廊吊顶(用户说的"上面那条白")也是宽高写反、横跨房间
   m.rotation.x=Math.PI/2;  m.position.set(CORR_CX, RH-0.04, CORR_CZ); scene.add(m); })();         // 吊顶
 (()=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(CORR_LEN, RH), corrWallMat);
   m.rotation.y=-Math.PI/2; m.position.set(CORR_X1, RH/2, CORR_CZ); scene.add(m); })();            // 外墙(法线朝走廊内)
@@ -5039,7 +5039,7 @@ winSpot.position.set(RW/2-0.10, (WIN_YB+WIN_YT)/2, WIN_CZ);
 winSpot.target.position.set(RW/2-3.0, 0.2, WIN_CZ-0.5);
 winSpot.castShadow = false;
 scene.add(winSpot); scene.add(winSpot.target);
-corrLeak.spot = { light: winSpot, max: 0.8 * Math.PI }; // 由 2.6 大幅降到 0.8：走廊灯不会在地面烧出死白大斑；Task6 ×π 补偿 SpotLight 物理单位
+corrLeak.spot = { light: winSpot, max: 0.12 * Math.PI }; // 0.8→0.12：连同移除 winFloor 贴图，从根源消除"走廊灯在地面烧出的死白光斑"(用户关掉太阳+吊顶灯后定位为走廊灯)；只保留极弱的走廊入光感；Task6 ×π 补偿 SpotLight 物理单位
 // 高窗的面光源(RectAreaLight)：白天柔和天光从右窗漫入(清晨/正午最强、夜间≈0)。
 // 这是「日间天光路径」(与夜间走廊漏光 winSpot/corrLeak 互补，后者只在室内暗时点亮)。
 // 仅影响 MeshStandard/MeshPhysical 材质；不投阴影。强度由 sync() 按 mInt(窗光强度)+窗帘 实时驱动。
@@ -5061,8 +5061,11 @@ const winFloor = new THREE.Mesh(new THREE.PlaneGeometry(2.4, RWIN_W+0.2), winFlo
 winFloor.rotation.x = -Math.PI/2; winFloor.rotation.z = Math.PI/2;
 winFloor.position.set(RW/2-1.4, 0.06, WIN_CZ-0.2); // 0.01→0.06：拉大与地砖间距，消除窗光区闪烁死白
 winFloor.renderOrder = 3; // 固定为最上层透明绘制：与下方 floorMirror 的相对顺序恒定，杜绝排序翻转导致的整片忽明忽暗
+// 走廊灯地面白光斑已移除：它是一张中心纯白的径向贴图(NormalBlending)，室内变暗时(spillGate→1)opacity 拉满，
+// 在地面读成一块抹掉砖缝的"死白"(与太阳/吊顶灯/地面反照率都无关，排查极隐蔽——最终由用户关灯定位为"走廊灯")。
+winFloor.visible = false;
 scene.add(winFloor);
-corrLeak.floor = { mat: winFloorMat, max: 0.20 };
+corrLeak.floor = { mat: winFloorMat, max: 0.0 };  // 0.20→0：彻底不再驱动该光斑
 // 窗下墙面光晕(光打在窗下墙上的柔光)
 const winWallMat = new THREE.MeshBasicMaterial({ color:0xe6eefb, transparent:true, opacity:0.0, depthWrite:false });
 const winWall = new THREE.Mesh(new THREE.PlaneGeometry(RWIN_W+0.5, 1.1), winWallMat);
@@ -6653,6 +6656,10 @@ winPositions.forEach((wz,wi)=>{
   patch.position.set(-RW/2+3.2, 0.012, worldZ);
   patch.userData.baseZ=worldZ;
   patch.userData.winIdx=wi;
+  // 地面阳光光斑已移除：它是一张无纹理的扁平暖色贴片(NormalBlending)，盖在地砖上抹平砖缝，
+  // 在真机稳态亮度下、尤其低机位掠射角会读成一条"死白"亮带(用户多次报告)。地面改由真实方向光
+  // +阴影自然照亮，砖缝清晰、任何机位都不再死白。墙面光斑(下方 wallPatch)保留不受影响。
+  patch.visible=false;
   scene.add(patch);
   winPatches.push(patch);
 
@@ -6704,6 +6711,11 @@ const beamTex = (()=>{
   const t=new THREE.CanvasTexture(c); return t;
 })();
 const sunBeams=[];
+// 体积阳光光束(god-ray) 总强度。0 = 关闭（默认）。
+// 起因：原 beamOp≈2.4 过强，且光束是"朝相机的扁平叠加发光面片"——低机位/掠射角下整片平铺到地面，
+// 读成无法消除的"地面死白"(不受地面亮度/粗糙度/bloom 影响，id 调试也不上色，排查极隐蔽)。
+// 想要一点点丁达尔光柱可在运行时按 g 键调高(建议 ≤0.3)。
+let BEAM_MUL = 0;
 winPositions.forEach(wz=>{
   const worldZ=-RD/2+6+RD/2+wz;
   const mtl=new THREE.MeshBasicMaterial({ map:beamTex, transparent:true, opacity:0.0,
@@ -6722,7 +6734,7 @@ function updateSunBeams(){
   const litAmt=Math.min(1, mI/2.6); // Task6: 参考值随 noon mInt 1.8→2.6 更新
   const hardMul=document.getElementById('curtainOn').checked ? 0.10 : 1.0;
   // 光束强度按"太阳越低越强"的陡曲线；暗室里大幅提亮 → 清晨/黄昏明显成束
-  const beamOp=2.7 * Math.pow(elevFactor,1.5) * litAmt * hardMul;
+  const beamOp=2.7 * Math.pow(elevFactor,1.5) * litAmt * hardMul * BEAM_MUL;  // ×BEAM_MUL：默认 0 关闭(god-ray 面片会成"地面死白")
   sunBeams.forEach(beam=>{
     beam.position.copy(beam.userData.winPos).addScaledVector(sunDir, 3.1); // 从窗心沿光线推半个长度(6.2/2)
     _bToCam.copy(camera.position).sub(beam.position).normalize();
@@ -6778,7 +6790,7 @@ function updateWindowPatches(angleDeg, sunElev){
       p.rotation.z = tilt + variation * 0.08;
       // Scale: low sun stretches patch longer
       p.scale.set(1.0 + (1-sunHeight)*0.6, 1.0 + (1-sunHeight)*1.2, 1);
-      p.material.opacity = Math.max(0, brightness) * hardMul;
+      p.material.opacity = Math.max(0, brightness) * hardMul;  // 注：地面光斑已在创建处 visible=false（见下），此处计算保留不影响
     } else {
       // Wall patch (right wall): 白天=低太阳斜射的暖光斑；夜间(漂移)=保留一抹冷蓝月光窗格影
       const wallBright = Math.max(0, (0.5 - sunHeight) * 0.34) * visibilityScale;
@@ -7763,8 +7775,9 @@ function onTimelineScrub(v){
 }
 
 // ── Screenshot ────────────────────────────────────────────────────────────────
-function takeShot(){
-  // Composite WebGL canvas + grain overlay into one image
+// 把 WebGL 画面 + 辉光 + 颗粒 合成成一张「最终画面」画布（截图与报告模式共用，
+// 保证报告里的图与用户实际所见完全一致）。
+function buildShotCanvas(){
   composer.render();
   const w = renderer.domElement.width, h = renderer.domElement.height;
   const composite = document.createElement('canvas');
@@ -7776,7 +7789,10 @@ function takeShot(){
   ctx.drawImage(bloomCv, 0, 0, w, h);
   ctx.globalCompositeOperation = 'source-over';
   ctx.drawImage(grainCv, 0, 0, w, h);
-  const url = composite.toDataURL('image/png');
+  return composite;
+}
+function takeShot(){
+  const url = buildShotCanvas().toDataURL('image/png');
   const a=document.createElement('a');a.href=url;
   a.download='空教室_'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.png';
   a.click();
@@ -8162,8 +8178,8 @@ if(driftOn){
   for(let i = 0; i < pbrMats.length; i++) pbrMats[i].envMapIntensity = envGate * (1 - 0.68 * curtainAmt) * (0.50 + 0.62 * ceilFill) * ceilBoost * (0.5 + 0.5*interiorDim); // Task6: IBL 底量上调(0.34→0.50)提亮日间漫反射、保持通透；清晨再压一档衬光柱
   ambientLight.intensity = baseAmbient * envGate * curtainDim * ceilFill * ceilBoost;
   // 地板加色反光层随光照淡出：整体瓷砖高光跟 envGate、窗侧反射带专门跟窗光 → 无光时地板真正全黑
-  floorMirrorMat.opacity    = 0.015 * envGate * curtainDim; // 0.030→0.015：加法叠层减半，避免在亮地面上再加白、把砖纹抹平成"整齐死白"
-  floorHighlightMat.opacity = 0.018 * Math.min(1, _winI / 2.6) * curtainDim; // 0.035→0.018：同上 (Task6: 参考值→2.6)
+  floorMirrorMat.opacity    = 0.004 * envGate * curtainDim; // 0.015→0.004：进一步砍掉这层扁平白加法叠层——它不受地面反照率影响，会在阳光亮地面上抹平砖缝成"死白"(实测对死白池贡献 ~12/255)
+  floorHighlightMat.opacity = 0.005 * Math.min(1, _winI / 2.6) * curtainDim; // 0.018→0.005：同上，窗侧高光带
 
   // Lerp hemisphere light (sky/ceiling bounce, strongest at noon)
   // 稍快跟随：暖调夕光能干净地过渡进冷调夜色，而非长时间残留暖黄。乘 envGate → 无光时天光也归零。
@@ -8272,7 +8288,8 @@ document.addEventListener('keydown', e=>{
 
 // ══════════════════════════════════════════════════════════════════════════════
 // DEBUG 可视化工具（默认关闭，对正式画面无影响）
-//   键位：U=UV棋盘  I=逐网格随机色  O=线框  P=打印相机参数到控制台  0=全部还原
+//   键位：U=UV棋盘  I=逐网格随机色  O=线框  P=打印相机参数到控制台  0=全部还原  R=报告模式
+//   报告模式：按 R 后点击画面异常处 → 自动拾取物体+生成复现链接+复制报告到剪贴板+存带红圈截图
 //   控制台：DBG.setView({theta,phi,camR,panX,panZ,panY})、DBG.uv()/id()/wire()/off()、DBG.view()
 //   URL：在文件名后加 #dbg=id&theta=1.57&phi=0.1&camR=14&panX=0&panZ=3&panY=1.6&preset=night
 //        —— 一个网址直达任意角度+调试模式，无需改代码反复渲染
@@ -8281,6 +8298,7 @@ document.addEventListener('keydown', e=>{
 (function(){
   const saved = new Map();           // mesh -> 原材质
   let mode = 'off';
+  let reportMode = false;            // 报告模式：点一下画面异常处 → 自动生成精准报错
   const checkerTex = (()=>{          // 黑白棋盘 + 红(U)绿(V)轴，便于判断 UV 朝向/密度
     const N=512, c=document.createElement('canvas'); c.width=c.height=N;
     const g=c.getContext('2d'), cells=8, s=N/cells;
@@ -8319,7 +8337,7 @@ document.addEventListener('keydown', e=>{
     box.style.display = vis ? 'block' : 'none';
     if(!vis) return;
     box.textContent =
-      `DBG[${mode}]  H=HUD U=UV I=网格色 O=线框 P=打印 0=还原\n`+
+      `DBG[${mode}]${reportMode?' · 报告模式:点异常处':''}  H=HUD U=UV I=网格色 O=线框 P=打印 R=报告 0=还原\n`+
       `theta=${theta.toFixed(3)}  phi=${phi.toFixed(3)}  camR=${camR.toFixed(2)}\n`+
       `panX=${panX.toFixed(2)}  panZ=${panZ.toFixed(2)}  panY=${panY.toFixed(2)}`;
   }
@@ -8330,21 +8348,133 @@ document.addEventListener('keydown', e=>{
     updateCam(); hud();
   }
   window.DBG = { setView, uv:()=>apply('uv'), id:()=>apply('id'), wire:()=>apply('wire'), off:()=>apply('off'),
-                 view:()=>({theta,phi,camR,panX,panZ,panY}), scene, camera, renderer };
+                 view:()=>({theta,phi,camR,panX,panZ,panY}), scene, camera, renderer,
+                 report:()=>toggleReport() };
+
+  // ══ 报告模式：点一下异常处 → 自动「物体 + 复现链接 + 带红圈截图 + 剪贴板报告」 ══
+  const toastBox=document.createElement('div');
+  toastBox.style.cssText='position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:10000;'+
+    'font:13px/1.5 system-ui,-apple-system,monospace;color:#fff;background:rgba(20,20,28,.88);'+
+    'padding:8px 14px;border-radius:8px;pointer-events:none;display:none;max-width:84vw;text-align:center';
+  document.body.appendChild(toastBox);
+  let toastTimer=0;
+  function toast(msg, sticky){
+    toastBox.textContent=msg; toastBox.style.display='block'; clearTimeout(toastTimer);
+    if(!sticky) toastTimer=setTimeout(()=>{ toastBox.style.display='none'; }, 4500);
+  }
+  function activePreset(){                       // 当前时间预设（从高亮按钮解析；无则 custom）
+    const on=document.querySelector('.preset-btn.on');
+    const m=on && on.getAttribute('onclick') && on.getAttribute('onclick').match(/applyPreset\('([^']+)'\)/);
+    return m ? m[1] : 'custom';
+  }
+  const ctlVal=id=>{ const e=document.getElementById(id); return e ? (e.type==='checkbox' ? (e.checked?'1':'0') : e.value) : ''; };
+  function lightHash(){                            // 实时灯光状态（滑块值），让报告能精确复现，而非只靠 preset 默认值
+    return `&mInt=${ctlVal('mInt')}&mTemp=${ctlVal('mTemp')}&mAngle=${ctlVal('mAngle')}`+
+           `&ceilOn=${ctlVal('ceilOn')}&ceilInt=${ctlVal('ceilInt')}&ceilTemp=${ctlVal('ceilTemp')}&curtainOn=${ctlVal('curtainOn')}`;
+  }
+  function buildHash(){                           // 把机位+预设+灯光状态打包成可复现 URL hash
+    const v=window.DBG.view();
+    return `#preset=${activePreset()}&theta=${v.theta.toFixed(3)}&phi=${v.phi.toFixed(3)}`+
+           `&camR=${v.camR.toFixed(2)}&panX=${v.panX.toFixed(2)}&panZ=${v.panZ.toFixed(2)}&panY=${v.panY.toFixed(2)}`+
+           lightHash();
+  }
+  function flashMesh(mesh){                        // 闪红高亮命中物体 ~0.7s，让用户确认选对
+    const mat=mesh.material;
+    if(!mat || !mat.emissive) return;
+    const oldE=mat.emissive.clone(), oldI=mat.emissiveIntensity;
+    mat.emissive.setRGB(1,0.12,0.12); mat.emissiveIntensity=(oldI||0)+0.9;
+    setTimeout(()=>{ mat.emissive.copy(oldE); mat.emissiveIntensity=oldI; }, 700);
+  }
+  function saveReportShot(px, py, fname){          // 合成截图 + 在点击处画红圈
+    const c=buildShotCanvas(), ctx=c.getContext('2d');
+    const r=Math.max(26, c.width*0.028);
+    ctx.lineWidth=Math.max(3, c.width*0.004); ctx.strokeStyle='#ff2b2b';
+    ctx.beginPath(); ctx.arc(px*c.width, py*c.height, r, 0, Math.PI*2); ctx.stroke();
+    const a=document.createElement('a'); a.href=c.toDataURL('image/png'); a.download=fname; a.click();
+  }
+  function onReportClick(e){
+    if(!reportMode) return;
+    e.stopPropagation(); e.preventDefault();      // 捕获阶段拦截，避免误触发 orbit/拖光
+    raycaster.setFromCamera(ndc(e), camera);
+    const meshes=[]; scene.traverse(o=>{ if(o.isMesh && o.visible) meshes.push(o); });
+    const hit=raycaster.intersectObjects(meshes, false)[0];
+    const px=e.clientX/innerWidth, py=e.clientY/innerHeight;
+    let objLine, hitLine;
+    if(hit){
+      const m=hit.object, p=hit.point;
+      objLine=`${m.name||'(未命名)'} (#id=${m.id}, ${m.material&&m.material.type||'?'})`;
+      hitLine=`世界坐标(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)}) / 画面位置 ${Math.round(px*100)}%, ${Math.round(py*100)}%`;
+      flashMesh(m);
+    } else {
+      objLine='未命中物体(背景/窗/天空)';
+      hitLine=`画面位置 ${Math.round(px*100)}%, ${Math.round(py*100)}%`;
+    }
+    const fname='报告_'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.png';
+    saveReportShot(px, py, fname);
+    const report=
+`## 画面异常报告
+- 复现链接: classroom_v4_3.html${buildHash()}
+- 时间预设: ${activePreset()}
+- 命中物体: ${objLine}
+- 命中点: ${hitLine}
+- 灯光状态: 太阳强度mInt=${ctlVal('mInt')} 色温=${ctlVal('mTemp')} 角度=${ctlVal('mAngle')} | 吊顶灯=${ctlVal('ceilOn')==='1'?'开':'关'} 亮度=${ctlVal('ceilInt')} | 窗帘=${ctlVal('curtainOn')==='1'?'拉':'开'}
+- 截图: ${fname}(问题点已红圈标出)
+
+### 症状(填一句)
+>
+
+### 期望(填一句)
+> `;
+    const done=()=>toast('✓ 报告已复制到剪贴板 · 截图已下载 — 直接粘贴给我，补两句症状/期望即可');
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(report).then(done, ()=>{ console.log(report); toast('剪贴板不可用，报告已打印到控制台(F12 查看)'); });
+    } else { console.log(report); toast('剪贴板不可用，报告已打印到控制台(F12 查看)'); }
+    reportMode=false; hud();
+  }
+  renderer.domElement.addEventListener('mousedown', onReportClick, { capture:true });
+  function toggleReport(){
+    reportMode=!reportMode;
+    if(reportMode) toast('报告模式：点一下画面里出问题的地方（再按 R 取消）', true);
+    else toastBox.style.display='none';
+    hud();
+  }
+
+  const floorBase = floor.material.color.clone();
+  let FLOOR_ALBEDO_MUL = 1.0;
   window.addEventListener('keydown',ev=>{
     if(ev.target && /^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName)) return;
     const k=ev.key.toLowerCase();
+    if(k==='-'||k==='='){   // 实时调地面反照率：阳光把地砖冲成死白时按 - 压暗，直到那块白里重新出现砖缝
+      FLOOR_ALBEDO_MUL=Math.max(0.2, Math.min(1.3, +(FLOOR_ALBEDO_MUL*(k==='-'?0.9:1/0.9)).toFixed(3)));
+      floor.material.color.copy(floorBase).multiplyScalar(FLOOR_ALBEDO_MUL);
+      toast('地面反照率 ×'+FLOOR_ALBEDO_MUL.toFixed(2)+'（- 压暗 / = 调亮；压到那块白出现砖缝为止，把数值告诉我）');
+      return;
+    }
     if(k==='u') apply(mode==='uv'?'off':'uv');
     else if(k==='i') apply(mode==='id'?'off':'id');
     else if(k==='o') apply(mode==='wire'?'off':'wire');
     else if(k==='0') restore();
     else if(k==='h'){ hudOn=!hudOn; hud(); }
+    else if(k==='r') toggleReport();
+    else if(k==='g'){ // 体积阳光光束(god-ray)强度：默认 0=关闭(过高会在地面成"死白")。g 增强 / Shift+g 减弱
+      BEAM_MUL=Math.max(0, Math.min(1, +( BEAM_MUL + (ev.shiftKey?-0.1:0.1) ).toFixed(2)));
+      toast('体积阳光光束 god-ray='+BEAM_MUL.toFixed(2)+'（g 增强 / Shift+g 减弱；0=关闭，建议 ≤0.3）');
+    }
     else if(k==='p') console.log('[DBG view]', JSON.stringify(window.DBG.view()));
   });
   const hp=new URLSearchParams(location.hash.slice(1));   // URL hash 一键定位
   if([...hp.keys()].length){
     const num=k=>hp.has(k)?parseFloat(hp.get(k)):undefined;
     if(hp.has('preset')) applyPreset(hp.get('preset'));
+    // 应用报告携带的实时灯光状态（覆盖 preset 默认值），让复现链接精确还原当时的亮度
+    const ovl=['mInt','mTemp','mAngle','ceilInt','ceilTemp','ceilOn','curtainOn'];
+    if(ovl.some(k=>hp.has(k))){
+      const setC=(id,cb)=>{ if(hp.has(id)){ const el=document.getElementById(id); if(el){ if(cb) el.checked=hp.get(id)==='1'; else el.value=hp.get(id); } } };
+      ['mInt','mTemp','mAngle','ceilInt','ceilTemp'].forEach(id=>setC(id,false));
+      ['ceilOn','curtainOn'].forEach(id=>setC(id,true));
+      try{ syncCeiling(); }catch(e){}
+      try{ sync(); }catch(e){}
+    }
     setView({theta:num('theta'),phi:num('phi'),camR:num('camR'),panX:num('panX'),panZ:num('panZ'),panY:num('panY')});
     if(hp.has('dbg')) apply(hp.get('dbg'));
   }

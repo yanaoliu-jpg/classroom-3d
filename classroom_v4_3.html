@@ -5021,15 +5021,12 @@ add(new THREE.BoxGeometry(wfD, wfT, RWIN_W+wfT*2), winFrameMat, RW/2-0.02, WIN_Y
 add(new THREE.BoxGeometry(wfD, wfT, RWIN_W+wfT*2), winFrameMat, RW/2-0.02, WIN_YT+wfT/2, WIN_CZ); // 上框
 add(new THREE.BoxGeometry(wfD, WIN_YT-WIN_YB, wfT), winFrameMat, RW/2-0.02, (WIN_YB+WIN_YT)/2, WIN_Z0-wfT/2); // 左框
 add(new THREE.BoxGeometry(wfD, WIN_YT-WIN_YB, wfT), winFrameMat, RW/2-0.02, (WIN_YB+WIN_YT)/2, WIN_Z1+wfT/2); // 右框
-// 中竖框 ×2(把窗分成三格)
-[WIN_CZ-RWIN_W/6, WIN_CZ+RWIN_W/6].forEach(mz=>{
-  add(new THREE.BoxGeometry(wfD*0.8, WIN_YT-WIN_YB, 0.035), winFrameMat, RW/2-0.02, (WIN_YB+WIN_YT)/2, mz);
-});
+// 中竖框已移除（用户要求"窗户只有玻璃"）——右高窗也只留外框 + 一整块清玻璃
 // 窗台(向室内挑出一点)
 add(new THREE.BoxGeometry(0.10, 0.04, RWIN_W+0.12), mat(0xe6e1d6,0.6), RW/2-0.06, WIN_YB-wfT, WIN_CZ);
 // 玻璃：半透 + 受走廊灯影响发出冷白光(emissive lerp)
 const winGlassMat = new THREE.MeshStandardMaterial({
-  color:0xcdd8e2, transparent:true, opacity:0.22, roughness:0.28, metalness:0.0, // roughness 0.08→0.28：玻璃不再近镜面，转动时高光不再扫成闪烁亮块
+  color:0xdfe9f2, transparent:true, opacity:0.08, roughness:0.20, metalness:0.0, // opacity 0.22→0.08：玻璃最大透光、更清透（用户要求）
   emissive:new THREE.Color(0xeaf0ff), emissiveIntensity:0.0, side:THREE.DoubleSide // 双面：从走廊外侧看也是一扇窗
 });
 const winGlass = new THREE.Mesh(new THREE.PlaneGeometry(RWIN_W-0.02, WIN_YT-WIN_YB-0.02), winGlassMat);
@@ -6327,10 +6324,10 @@ const skyGlows=[]; // track for dynamic sky color during drift
 const extMats=[];  // 窗外景物材质：随昼夜整体明暗（夜晚压暗，避免窗户一直发亮）
 
 // 窗户尺寸
-const WIN_W = 2.7;  // 总宽（1.9→2.7 加宽窗户，采光更大；窗心间距 4，加宽后窗洞仍不重叠，窗间墙垛约 1.3m。所有窗框/玻璃/窗帘/遮光板缺口都按此常量联动）
-const WIN_H = 1.9;  // 总高（真实教室窗 ~1.8-2.0m）
-const WIN_BOTTOM = 0.9; // 窗台高度（真实 ~0.9m，略高于课桌）
-const WIN_TOP = WIN_BOTTOM + WIN_H; // 顶部高度 = 2.8（距 3.5m 吊顶 0.7m）
+const WIN_W = 3.3;  // 总宽 2.7→3.3 加大进光面积（窗心间距 4，窗间墙垛约 0.7m，仍不重叠）。所有窗框/玻璃/遮光板缺口按此常量联动
+const WIN_H = 2.6;  // 总高 1.9→2.6 加大进光面积（更高的窗）
+const WIN_BOTTOM = 0.65; // 窗台 0.9→0.65 放低 → 窗更高更大，进光更多
+const WIN_TOP = WIN_BOTTOM + WIN_H; // 顶部 = 3.25（距 3.5m 吊顶 0.25m）
 const WIN_MID = WIN_BOTTOM + WIN_H * 0.68; // 上下分隔线高度（下扇占68%）
 
 // ── 窗墙遮光体 (real sunlight shaping) ────────────────────────────────────────
@@ -6490,20 +6487,7 @@ winPositions.forEach((wz,wi)=>{
   add(new THREE.BoxGeometry(fw, fw, WIN_W + fw*2), fMat, wx+fw/2, WIN_TOP,            worldZ);
   add(new THREE.BoxGeometry(fw, fw, WIN_W + fw*2), fMat, wx+fw/2, WIN_BOTTOM,         worldZ);
 
-  // 上下分隔横梁
-  add(new THREE.BoxGeometry(fw, fw*0.8, WIN_W), fMat, wx+fw/2, WIN_MID, worldZ);
-
-  // 下扇：2列 × 2行竖格（中间竖梃 + 一条横中梃）
-  const midZ = worldZ; // 竖向中线
-  add(new THREE.BoxGeometry(fw*0.7, WIN_MID-WIN_BOTTOM, fw*0.7), fMat, wx+fw/2, WIN_BOTTOM+(WIN_MID-WIN_BOTTOM)/2, midZ); // 中竖
-  const lowerMid = WIN_BOTTOM + (WIN_MID - WIN_BOTTOM) * 0.48;
-  add(new THREE.BoxGeometry(fw*0.6, fw*0.6, WIN_W), fMat, wx+fw/2, lowerMid, worldZ); // 下扇横中梃
-
-  // 上扇：3列竖格（两根细竖梃）
-  const upperH = WIN_TOP - WIN_MID;
-  [-WIN_W*0.28, WIN_W*0.28].forEach(dz => {
-    add(new THREE.BoxGeometry(fw*0.55, upperH, fw*0.55), fMat, wx+fw/2, WIN_MID + upperH/2, worldZ + dz);
-  });
+  // 窗格中梃/横梁已全部移除（用户要求："窗户只有玻璃"）——只留外框，一整块清玻璃
 
   // ── 窗台（三层：台面 + 前沿挡板 + 底部过渡，告别悬浮）──────────────────────
   const mS  = mat(0xe8e4dc, 0.80);  // 台面
@@ -6551,30 +6535,7 @@ winPositions.forEach((wz,wi)=>{
     return m;
   }
 
-  const cy = WIN_BOTTOM + curtainH/2 - 0.15;
-  // 闭合时每片需覆盖半扇窗 → 宽度从 curtainW 拉伸到 WIN_W/2，中心滑向窗心两侧 1/4 处
-  const closedSX = (WIN_W/2) / curtainW;
-
-  // 左帘
-  const cLeft = makeCurtain(curtainW, curtainH, 0.0);
-  cLeft.rotation.y = Math.PI/2;
-  const lOpenZ = worldZ - WIN_W/2 + curtainW/2;     // 半拉开（贴左缘）
-  const lClosedZ = worldZ - WIN_W/4;                  // 闭合（覆盖左半扇）
-  cLeft.position.set(wx + 0.11, cy, lOpenZ);
-  scene.add(cLeft);
-  curtainPanels.push({ mesh: cLeft, openZ: lOpenZ, closedZ: lClosedZ, closedSX });
-
-  // 右帘（错开相位，左右不对称更自然）
-  const cRight = makeCurtain(curtainW, curtainH, 1.6);
-  cRight.rotation.y = Math.PI/2;
-  const rOpenZ = worldZ + WIN_W/2 - curtainW/2;
-  const rClosedZ = worldZ + WIN_W/4;
-  cRight.position.set(wx + 0.11, cy, rOpenZ);
-  scene.add(cRight);
-  curtainPanels.push({ mesh: cRight, openZ: rOpenZ, closedZ: rClosedZ, closedSX });
-
-  // 窗帘轨道
-  add(new THREE.BoxGeometry(0.04, 0.05, WIN_W + 0.3), mat(0xc0bab2, 0.5, 0.4), wx+0.07, WIN_TOP + 0.1, worldZ);
+  // 窗帘（左右帘片 + 轨道）已删除（用户要求）——窗户完全敞开，最大进光
 });
 
 // ── WINDOW LIGHT SHAFTS + GRID SHADOWS ───────────────────────────────────────
@@ -6716,10 +6677,9 @@ const beamTex = (()=>{
   const t=new THREE.CanvasTexture(c); return t;
 })();
 const sunBeams=[];
-// 体积阳光光束(god-ray) 总强度。0 = 关闭（默认）。
-// 起因：原 beamOp≈2.4 过强，且光束是"朝相机的扁平叠加发光面片"——低机位/掠射角下整片平铺到地面，
-// 读成无法消除的"地面死白"(不受地面亮度/粗糙度/bloom 影响，id 调试也不上色，排查极隐蔽)。
-// 想要一点点丁达尔光柱可在运行时按 g 键调高(建议 ≤0.3)。
+// 体积阳光光束(god-ray/丁达尔光柱) 总强度。0 = 关闭（用户要求删掉）。
+// 注：光束是"朝相机的扁平叠加发光面片"，过高时低机位/掠射角会平铺到地面成"死白"。
+// 想再要一点丁达尔光柱可运行时按 g 增强（Shift+g 减弱）。
 let BEAM_MUL = 0;
 winPositions.forEach(wz=>{
   const worldZ=-RD/2+6+RD/2+wz;
@@ -6995,6 +6955,7 @@ const TUBES_PER_FIXT  = 2;     // 每组灯具灯管数（2~3）
 const TUBE_GAP        = 0.16;  // 相邻灯管间距
 const HOUSING_W       = TUBE_GAP * (TUBES_PER_FIXT - 1) + 0.18;
 
+const fluoroLights = [];   // 每组灯具下方一盏点光源（12 盏，位置与灯具一一对应）
 [-4, 0, 4].forEach(row => {   // 2 列(-2,2) → 3 列(-4,0,4)：左/中/右三列天花板灯，均匀铺满教室
   [-5, -1, 3, 7].forEach(z => {
     const posZ = -RD/2+6+RD/2+z-3;
@@ -7038,6 +6999,13 @@ const HOUSING_W       = TUBE_GAP * (TUBES_PER_FIXT - 1) + 0.18;
     glow.position.set(row, RH-0.12, posZ);
     scene.add(glow);
     fluoroGlows.push(glow);
+
+    // 每组灯具正下方一盏点光源 → 光从灯具位置发出（修复：原来只有 3 盏灯摆在灯具之间，亮斑对不上灯位）
+    const fl = new THREE.PointLight(0xf5f3ee, 0, 9, 2);
+    fl.position.set(row, RH-0.28, posZ);
+    fl.castShadow = false;
+    scene.add(fl);
+    fluoroLights.push(fl);
   });
 });
 
@@ -7443,15 +7411,10 @@ const dustBasePos = dustPos.slice();
 // ── Ceiling LED panel lights — 现代学校 LED 平板灯 ───────────────────────────
 // 中性偏冷白、瞬时点亮、无频闪。开关 / 亮度 / 色温由控制面板手动控制（唯一控制源）。
 // 三列天花板灯对应 3 盏 PointLight（左/中/右），沿 x=[-4,0,4]、z 错开覆盖全室
-const flouroLight1=new THREE.PointLight(0xf5f3ee,1.4,16,2);
-flouroLight1.position.set(-4,RH-0.2,1);flouroLight1.castShadow=false;
-scene.add(flouroLight1);
-const flouroLight2=new THREE.PointLight(0xf5f3ee,1.4,16,2);
-flouroLight2.position.set(4,RH-0.2,3);flouroLight2.castShadow=false;
-scene.add(flouroLight2);
-const flouroLight3=new THREE.PointLight(0xf5f3ee,1.4,16,2);
-flouroLight3.position.set(0,RH-0.2,5);flouroLight3.castShadow=false;
-scene.add(flouroLight3);
+// 天花板灯照明现由每组灯具下的 fluoroLights(12 盏)提供（见上方灯具循环）——灯光与灯位一一对应。
+// ceilLevel 平滑跟随 flouroTarget，统一驱动 12 盏点光源 + 灯板自发光 + 黑板书写灯。
+let ceilLevel = 0;
+const CEIL_PERLIGHT = 0.32;   // 每盏点光源强度 = ceilLevel × 此系数（12 盏，总量与原 3 盏相当）
 // ── 窗口透射填充光（Stage 6 · GI 近似）─────────────────────────────────────────
 // 每扇窗一盏柔和 SpotLight，从窗口斜射入室，模拟阳光穿过玻璃后在室内的散射光晕。
 // 不投影（castShadow=false，省性能、不与主光阴影打架）；decay=2 物理平方衰减 → 近窗亮、远处暗。
@@ -7516,9 +7479,7 @@ function syncCeiling(){
   const ct  = +document.getElementById('ceilTemp').value;
   flouroTarget = on ? bri * Math.PI : 0; // Task6: physically-correct lights → ×π 补偿 PointLight 坎德拉单位变暗
   ceilColor.copy(tempToColorLED(ct));
-  flouroLight1.color.copy(ceilColor);
-  flouroLight2.color.copy(ceilColor);
-  flouroLight3.color.copy(ceilColor);
+  fluoroLights.forEach(fl => fl.color.copy(ceilColor));
   const cd = document.getElementById('cDot');
   cd.style.opacity = on ? '1' : '0.3';
   cd.style.background = '#'+ceilColor.getHexString();
@@ -7647,9 +7608,9 @@ syncCorridor();
 
 // ── Presets ───────────────────────────────────────────────────────────────────
 const PRESETS={
-  morning:{ mInt:3.0,mBlur:5, mTemp:0.68,mAngle:-66, fOn:true, fInt:0.95,fTemp:0.32, rOn:true, rInt:0.28,rTemp:0.5,  rY:3.8, desc:'清晨第一束光，从东窗低斜入，长长的影子与光柱' }, // mInt 2.3→3.0 提亮太阳
-  noon:   { mInt:3.2,mBlur:5, mTemp:0.50,mAngle:0,   fOn:true, fInt:1.35,fTemp:0.44, rOn:true, rInt:0.45,rTemp:0.52, rY:4.2, desc:'正午顶光，太阳角度高，影子短而清晰，荧光灯与天光共存' }, // mInt 2.6→3.2 提亮太阳
-  dusk:   { mInt:2.6,mBlur:6, mTemp:0.82,mAngle:58,  fOn:true, fInt:1.05,fTemp:0.28, rOn:true, rInt:0.22,rTemp:0.45, rY:3.2, desc:'傍晚夕光，橙红色，把课桌染成金色' }, // mInt 2.0→2.6 提亮太阳
+  morning:{ mInt:4.0,mBlur:5, mTemp:0.68,mAngle:-66, fOn:true, fInt:1.20,fTemp:0.32, rOn:true, rInt:0.28,rTemp:0.5,  rY:3.8, desc:'清晨第一束光，从东窗低斜入，长长的影子与光柱' }, // 提亮：太阳 mInt→4.0 / 吊顶 fInt→1.20
+  noon:   { mInt:4.1,mBlur:5, mTemp:0.50,mAngle:0,   fOn:true, fInt:1.65,fTemp:0.44, rOn:true, rInt:0.45,rTemp:0.52, rY:4.2, desc:'正午顶光，太阳角度高，影子短而清晰，荧光灯与天光共存' }, // 提亮：太阳 mInt→4.1 / 吊顶 fInt→1.65
+  dusk:   { mInt:3.5,mBlur:6, mTemp:0.82,mAngle:58,  fOn:true, fInt:1.30,fTemp:0.28, rOn:true, rInt:0.22,rTemp:0.45, rY:3.2, desc:'傍晚夕光，橙红色，把课桌染成金色' }, // 提亮：太阳 mInt→3.5 / 吊顶 fInt→1.30
   night:  { mInt:0.0,mBlur:8, mTemp:0.55,mAngle:-35, fOn:true, fInt:0.08,fTemp:0.22, rOn:true, rInt:0.35,rTemp:0.48, rY:4.0, desc:'深夜，只有走廊的灯透进来，教室空旷而安静' },
   custom: { mInt:1.8,mBlur:8, mTemp:0.65,mAngle:-35, fOn:true, fInt:0.80,fTemp:0.38, rOn:true, rInt:0.35,rTemp:0.55, rY:4.0, desc:'' },
 };
@@ -7674,11 +7635,11 @@ function applyPreset(k){
   else if(k!=='custom'){ document.getElementById('ceilOn').checked=true; syncCeiling(); }
   // ── 窗户辉光 + 光斑色温（修复：静态预设此前从不更新 skyGlow，恒为冷白强光）──────
   // 晨/午=冷蓝天光，夕=暖橙夕照，夜=深蓝月色（弱）。让夜间窗户呈月色而非暖黄/冷白。
-  const winGlow = {
-    morning: { r:0.78, g:0.86, b:1.00, o:0.20 },
-    noon:    { r:0.85, g:0.92, b:1.00, o:0.24 },
-    dusk:    { r:1.00, g:0.55, b:0.30, o:0.16 },
-    night:   { r:0.20, g:0.28, b:0.50, o:0.10 },   // 深蓝月色
+  const winGlow = {   // o(玻璃 tint 不透明度)大幅下调 → 玻璃更清透、最大透光（用户要求）
+    morning: { r:0.78, g:0.86, b:1.00, o:0.06 },
+    noon:    { r:0.85, g:0.92, b:1.00, o:0.07 },
+    dusk:    { r:1.00, g:0.55, b:0.30, o:0.05 },
+    night:   { r:0.20, g:0.28, b:0.50, o:0.06 },   // 深蓝月色
   }[k];
   if(winGlow){
     skyGlows.forEach(sg=>{ sg.color.setRGB(winGlow.r, winGlow.g, winGlow.b); sg.opacity = winGlow.o; });
@@ -8160,9 +8121,8 @@ if(driftOn){
 
   // Ceiling LED — 快速平滑点亮 / 熄灭（LED 瞬时响应，无频闪）
   const flouroLerp = 0.16;
-  flouroLight1.intensity += (flouroTarget - flouroLight1.intensity) * flouroLerp;
-  flouroLight2.intensity += (flouroTarget - flouroLight2.intensity) * flouroLerp;
-  flouroLight3.intensity += (flouroTarget - flouroLight3.intensity) * flouroLerp;
+  ceilLevel += (flouroTarget - ceilLevel) * flouroLerp;
+  for(let i=0;i<fluoroLights.length;i++) fluoroLights[i].intensity = ceilLevel * CEIL_PERLIGHT;
 
   // ── 真实黑暗门控 ──────────────────────────────────────────────────────────────
   // "没光源仍发灰"的根因：scene.environment(IBL) 给所有 PBR 材质漫射补光 + AmbientLight/
@@ -8185,7 +8145,7 @@ if(driftOn){
   // ceiling-brighten: 灯越亮 → 室内整体漫反射补光越强（模拟更亮的天花板灯具向全室散射的反弹光）。
   // 由 flouroTarget(=bri×π) 归一化驱动；天花板灯关闭(flouroTarget→0)时 ceilBoost→1.0 不变，夜间不受影响。
   // 仅平滑抬升均匀补光底量、不制造热点，让宽景（俯瞰）也能随灯变亮，而非只在灯下形成光斑。
-  const ceilBri = flouroLight1.intensity / Math.PI;      // 平滑跟随的当前灯亮度(≈slider bri)
+  const ceilBri = ceilLevel / Math.PI;      // 平滑跟随的当前灯亮度(≈slider bri)
   const ceilBoost = 1 + 0.70 * Math.min(1, Math.max(0, ceilBri - 0.25)); // 0.25 以下不加成，1.0 时 +70%
   for(let i = 0; i < pbrMats.length; i++) pbrMats[i].envMapIntensity = envGate * (1 - 0.68 * curtainAmt) * (0.50 + 0.62 * ceilFill) * ceilBoost * (0.5 + 0.5*interiorDim); // Task6: IBL 底量上调(0.34→0.50)提亮日间漫反射、保持通透；清晨再压一档衬光柱
   ambientLight.intensity = baseAmbient * envGate * curtainDim * ceilFill * ceilBoost;
@@ -8201,7 +8161,7 @@ if(driftOn){
   moonLight.intensity += (moonTarget - moonLight.intensity) * 0.04;
 
   if(fluoroMat){
-    const t01 = Math.min(1, flouroLight1.intensity / FLOURO_MAX); // 0..1
+    const t01 = Math.min(1, ceilLevel / FLOURO_MAX); // 0..1
     const brightness = 0.25 + t01 * 0.75;
     // 灯板颜色/自发光跟随当前 LED 色温，呈干净的中性白
     fluoroMat.color.copy(ceilColor).multiplyScalar(brightness);

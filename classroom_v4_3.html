@@ -6009,7 +6009,7 @@ const STEP_H = 0.18;   // 台高（供讲桌抬升复用）
   const PZ = -RD/2 + 8.2;            // 讲桌中心 z (=-2.8)
   const zBack  = -RD/2 + 6 + 0.6;    // 平台后沿：距黑板墙 0.6m (z=-4.4)
   const zFront = PZ + 0.82/2 + 0.18; // 平台前沿：讲桌学生侧面再向前 0.18m 站沿 (z≈-2.21)
-  const stepW  = 5.0;
+  const stepW  = 8.5;   // 5.0→8.5：讲台增高地台往左右延伸（略宽于 7.7 黑板，居中）
   const stepD  = zFront - zBack;
   const zCtr   = (zFront + zBack) / 2;
 
@@ -6087,7 +6087,7 @@ const STEP_H = 0.18;   // 台高（供讲桌抬升复用）
 //   5. Legs — thigh angled slightly downward, shin near-vertical, knee cap dot
 //   6. Finger hints — three thin ridges on each hand dorsum
 {
-  const SX     = -0.625;   // 中间大列·靠窗那张桌（对齐新课桌布局）
+  const SX     = 0;        // 正中一列的桌（列间距等距后，学生随中心列移到 x=0）
   const SZ     =  4.0;
   const DESK_Y =  0.76;
   const SEAT_Y =  0.46;
@@ -6885,11 +6885,11 @@ dappleFloorDefs.forEach(({ x, z, w, d, seed, phase }) => {
     opacity: 0.30,
     depthWrite: false,
   });
-  const deskDapple = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.7), deskDappleMat);
+  const deskDapple = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.4), deskDappleMat);
   deskDapple.rotation.x = -Math.PI/2;
-  deskDapple.position.set(-1.2, 0.765, 3.8); // on the student's desk, over the book
+  deskDapple.position.set(0, 0.765, 4.0); // 随学生移到中心列桌面(x=0,z≈4.0)；尺寸缩到单人桌面内，避免悬出成漂浮光斑
   scene.add(deskDapple);
-  dappleMeshes.push({ mesh: deskDapple, mat: deskDappleMat, baseX:-1.2, baseZ:3.8, phase:0.5, speedX:0.018, speedZ:0.011 });
+  dappleMeshes.push({ mesh: deskDapple, mat: deskDappleMat, baseX:0, baseZ:4.0, phase:0.5, speedX:0.018, speedZ:0.011 });
 }
 
 // Wall dapple — patches on the left wall and slightly onto the right wall
@@ -6903,6 +6903,8 @@ dappleFloorDefs.forEach(({ x, z, w, d, seed, phase }) => {
   const wallDapple = new THREE.Mesh(new THREE.PlaneGeometry(4.0, 2.8), wallDappleMat);
   wallDapple.rotation.y = Math.PI/2;
   wallDapple.position.set(-RW/2+0.12, 2.6, -RD/2+6+RD/2);
+  wallDapple.visible = false;   // 移除：这块贴在左墙窗洞上的叶影贴片含暖白亮斑(makeDappleTex 的 glints)，
+  // 是 MeshBasicMaterial 无光材质→夜里照样发亮，且盖在窗洞上→亮斑悬浮在暗窗里成"漂浮光点"(用户反馈)。
   scene.add(wallDapple);
   dappleMeshes.push({ mesh: wallDapple, mat: wallDappleMat, baseX:-RW/2+0.12, baseZ:-RD/2+6+RD/2, phase:1.8, speedX:0.0, speedZ:0.014, isWall:true });
 }
@@ -7073,12 +7075,12 @@ const fluoroLights = [];   // 每组灯具下方一盏点光源（12 盏，位�
 
 // ── STUDENT DESKS (6 columns = 3 joined pairs 同桌 × 5 rows) ──────────────────
 const COLS=8, ROWS=5;
-const deskW=1.1, deskD=0.65, deskH=0.04;
+const deskW=1.1, deskD=0.65, deskH=0.04;   // 恢复最初原始宽度 1.1×0.65（单人布局保留，只把每张桌面尺寸调回原始）；弯管架/笔槽/书箱按此参数化自动缩放
 const rowSpacing=2.0;
 // 8 列：靠窗单列(−x，贴墙) / 窗边大列 / 中间大列 / 靠墙大列 / 靠墙单列(+x，贴墙)。
 // 每大列两张桌拼成"同桌"(间隙≈0.15m)；两侧单列单独贴近窗墙/侧墙，与中间三大列拉开过道，
 // 不再三列并在一块。靠窗单列 -6.1、靠墙单列 +6.1（桌沿距墙约 0.4m）。
-const colX=[-6.10, -4.35,-3.10, -0.625,0.625, 3.10,4.35, 6.10];
+const colX=[-6.10, -4.35,-3.05, 0,0.625, 3.05,4.35, 6.10]; // 保留列(下标0/2/3/5/7)等距：-6.10/-3.05/0/3.05/6.10(相邻间距均=3.05)
 const startZ=-RD/2+6+5.0;
 
 const deskMat=mat(0xcdb088,0.6,0,deskTex,deskNormal,deskRough); // 0x8a6838→0xcdb088：配合抬亮的木纹贴图，桌色改为浅暖橡木(贴图×桌色不再相乘成黑)，桌面落出明亮木质
@@ -7088,14 +7090,14 @@ const chairMat=mat(0x7c7c88,0.55);                              // 0x4a4a55→0x
 // 倒角几何体只建一次，20 套桌椅复用（省内存、稳定帧率）
 const deskGeo     = roundedBox(deskW, deskH, deskD, 0.014, 3);
 const deskLegGeo  = roundedBox(0.035, 0.76, 0.035, 0.012, 2);
-const seatGeo     = roundedBox(0.44, 0.03, 0.40, 0.013, 3);
-const backGeo     = roundedBox(0.44, 0.32, 0.025, 0.011, 2);
+const seatGeo     = roundedBox(0.52, 0.03, 0.44, 0.013, 3);
+const backGeo     = roundedBox(0.52, 0.32, 0.025, 0.011, 2);
 const chairLegGeo = roundedBox(0.025, 0.46, 0.025, 0.010, 2);
 const bookGeo     = roundedBox(0.22, 0.028, 0.16, 0.006, 2);
 
 // ── 桌斗几何体：桌面下方的开放储物格（5 面盒子，开口朝学生侧 +Z）──────────────────
 // 一次性创建、30 套课桌复用。尺寸略小于桌面、夹在四条桌腿之间；内壁稍深一档增强纵深。
-const douW=0.96, douD=0.52, douH=0.14;       // 储物格宽/深/高
+const douW=0.96, douD=0.52, douH=0.14;       // 储物格宽/深/高（随桌面恢复原始尺寸，须 < deskW/deskD）
 const douTopY=0.74;                          // 顶沿紧贴桌面板底（桌面中心 0.76、半厚 0.02）
 const douCenterY=douTopY-douH/2;             // 侧/后板中心高
 const douBotY=douTopY-douH;                  // 底板所在高度 ≈0.60（高于学生膝盖，腿可伸入）
@@ -7105,6 +7107,24 @@ const douSideGeo  =roundedBox(0.014, douH, douD, 0.004, 1);
 const douLipGeo   =roundedBox(douW, 0.045, 0.012, 0.004, 1); // 前下沿小挡条，挡书又不封口
 const douMat=mat(0x6a4f28,0.70,0,deskTex);   // 0x55401f→0x6a4f28：随桌面抬高，仍比桌面略深，保留"格子"暗腔但不再死黑
 
+// ── 参考图风格：银色弯管钢架 + 木质座椅 + 桌面笔槽/透气书箱 ─────────────────────────
+const steelMat = mat(0xc7cbcf, 0.36, 0.78);           // 银色金属圆管（powder-coated 钢管，微反光）
+const footMat  = mat(0x27272b, 0.78, 0.0);            // 管脚橡胶套（深灰）
+const ventMat  = mat(0x241f19, 0.85, 0.0);            // 书箱透气孔（暗色内凹槽）
+const chairWoodMat = mat(0xc9a877,0.52,0,deskTex,deskNormal,deskRough); // 椅座/靠背：暖木色弯合板（配套课桌）
+// 圆管几何（固定长度、40 套复用；水平管在几何层预旋转到 X/Z 轴向）
+const TUBE_R = 0.016;
+const dLegTubeGeo = new THREE.CylinderGeometry(TUBE_R,TUBE_R,0.72,10);                          // 桌·竖腿(Y 向)
+const dRunTubeGeo = new THREE.CylinderGeometry(TUBE_R,TUBE_R,deskD-0.10,10).rotateX(Math.PI/2); // 桌·底部纵向撬脚(Z 向)
+const dCrsTubeGeo = new THREE.CylinderGeometry(TUBE_R,TUBE_R,deskW-0.14,10).rotateZ(Math.PI/2); // 桌·横向连杆(X 向)
+const footGeo     = new THREE.CylinderGeometry(0.021,0.025,0.035,8);                            // 管脚套
+const cLegTubeGeo = new THREE.CylinderGeometry(0.013,0.013,0.44,10);                            // 椅·竖腿
+const cRunTubeGeo = new THREE.CylinderGeometry(0.013,0.013,0.34,10).rotateX(Math.PI/2);         // 椅·纵向撬脚
+const cFootGeo    = new THREE.CylinderGeometry(0.016,0.019,0.03,8);                             // 椅·管脚套
+const grooveGeo   = roundedBox(deskW-0.10, 0.02, 0.032, 0.006, 1);                              // 桌面后缘·笔槽凸唇
+const douFrontGeo = roundedBox(douW, douH, 0.012, 0.004, 1);                                    // 书箱正面板(封口)
+const ventStripGeo= roundedBox(douW*0.62, 0.010, 0.006, 0.002, 1);                              // 书箱透气横槽
+
 // Seeded pseudo-random so scene looks the same every load
 function seededRand(seed){
   const x=Math.sin(seed+1)*43758.5453;
@@ -7113,6 +7133,7 @@ function seededRand(seed){
 
 for(let row=0;row<ROWS;row++){
   for(let col=0;col<COLS;col++){
+    if(col===1||col===4||col===6) continue;   // 去掉第2/5/7列(1-based，colX 由左→右)的桌椅
     const idx=row*COLS+col;
     const s=idx*7.3; // seed base
 
@@ -7135,14 +7156,27 @@ for(let row=0;row<ROWS;row++){
     desk.castShadow=true;desk.receiveShadow=true;
     scene.add(desk);
 
-    // Desk legs (4)
-    [[deskW/2-0.05,-0.38,deskD/2-0.05],[-(deskW/2-0.05),-0.38,deskD/2-0.05],
-     [deskW/2-0.05,-0.38,-(deskD/2-0.05)],[-(deskW/2-0.05),-0.38,-(deskD/2-0.05)]
-    ].forEach(([lx,ly,lz])=>{
-      const leg=new THREE.Mesh(deskLegGeo,legMat2);
-      leg.position.set(dx+lx,0.76+ly,dz+lz);leg.castShadow=true;
-      scene.add(leg);
+    // 桌面后缘·笔槽凸唇（挡笔的凸起边条，作为桌面子物体随其旋转）
+    const groove=new THREE.Mesh(grooveGeo,deskMat);
+    groove.position.set(0, deskH/2+0.01, -deskD/2+0.03);
+    groove.castShadow=true; desk.add(groove);
+
+    // ── 银色弯管钢架（撬脚式）：4 竖腿 + 底部纵撬脚 + 顶部横连杆 + 管脚套 ──────────────
+    const frame=new THREE.Group();
+    frame.position.set(dx,0,dz); frame.rotation.y=deskRot;
+    const mkTube=(geo,material,px,py,pz)=>{
+      const m=new THREE.Mesh(geo,material); m.position.set(px,py,pz); m.castShadow=true; frame.add(m);
+    };
+    const dLX=deskW/2-0.075, dLZ=deskD/2-0.06;
+    [[dLX,dLZ],[-dLX,dLZ],[dLX,-dLZ],[-dLX,-dLZ]].forEach(([lx,lz])=>{
+      mkTube(dLegTubeGeo, steelMat, lx, 0.39,  lz);   // 竖腿(底≈0.03→顶≈0.75)
+      mkTube(footGeo,     footMat,  lx, 0.018, lz);   // 管脚套
     });
+    mkTube(dRunTubeGeo, steelMat, -dLX, 0.05, 0);     // 左·底纵撬脚
+    mkTube(dRunTubeGeo, steelMat,  dLX, 0.05, 0);     // 右·底纵撬脚
+    mkTube(dCrsTubeGeo, steelMat, 0, 0.72,  dLZ);     // 前·横连杆
+    mkTube(dCrsTubeGeo, steelMat, 0, 0.72, -dLZ);     // 后·横连杆
+    scene.add(frame);
 
     // ── 桌斗：桌面下方的开放储物格（开口朝椅子/学生侧 +Z，像私人小仓库）────────────
     // 用一个 Group 承载五块板，整体随桌面同角度(deskRot)旋转；+Z 面敞开、仅留一道矮挡条。
@@ -7159,7 +7193,13 @@ for(let row=0;row<ROWS;row++){
     mkDou(douBackGeo,   0,              douCenterY,      -douD/2+0.007);     // 后挡板(-Z，远离学生)
     mkDou(douSideGeo,  -douW/2+0.007,   douCenterY,       0);               // 左侧板
     mkDou(douSideGeo,   douW/2-0.007,   douCenterY,       0);               // 右侧板
-    mkDou(douLipGeo,    0,              douBotY+0.0225,   douD/2-0.006);     // 前下沿矮挡条(+Z 学生侧，其余敞开)
+    mkDou(douFrontGeo,  0,              douCenterY,       douD/2-0.006);     // 正面板(+Z 学生侧，封口成书箱)
+    // 透气横槽（3 道暗色内凹，模拟塑料书箱正面的透气孔）
+    [douCenterY+0.035, douCenterY, douCenterY-0.035].forEach(vy=>{
+      const v=new THREE.Mesh(ventStripGeo,ventMat);
+      v.position.set(0, vy, douD/2-0.0002);
+      dou.add(v);
+    });
     scene.add(dou);
 
     // Chair — pushed back at varied angles, not always perfectly behind desk
@@ -7176,14 +7216,14 @@ for(let row=0;row<ROWS;row++){
     addContactShadow(cx, cz, 0.62, 0.62, chairRot);
 
     // Seat
-    const seat=new THREE.Mesh(seatGeo,chairMat);
+    const seat=new THREE.Mesh(seatGeo,chairWoodMat);
     seat.position.set(cx,0.46,cz);
     seat.rotation.y=chairRot;
     seat.castShadow=true;seat.receiveShadow=true;
     scene.add(seat);
     // Back — offset rotated with chair so it stays correctly attached to the seat
     const backOffsetZ = +(seatDepth/2 - 0.02); // +Z = rear of seat, toward which student leans
-    const back=new THREE.Mesh(backGeo,chairMat);
+    const back=new THREE.Mesh(backGeo,chairWoodMat);
     back.position.set(
       cx + backOffsetZ * Math.sin(chairRot),
       0.7,
@@ -7191,16 +7231,18 @@ for(let row=0;row<ROWS;row++){
     );
     back.rotation.y=chairRot;back.rotation.x=-0.1;
     back.castShadow=true;back.receiveShadow=true;scene.add(back);
-    // Chair legs
-    [[0.19,-0.23,0.17],[-(0.19),-0.23,0.17],[0.19,-0.23,-(0.17)],[-(0.19),-0.23,-(0.17)]
-    ].forEach(([lx,ly,lz])=>{
-      const cl=new THREE.Mesh(chairLegGeo,legMat2);
-      // Rotate leg offsets with the chair
-      const rlx=lx*Math.cos(chairRot)-lz*Math.sin(chairRot);
-      const rlz=lx*Math.sin(chairRot)+lz*Math.cos(chairRot);
-      cl.position.set(cx+rlx,0.46+ly,cz+rlz);cl.castShadow=true;
-      scene.add(cl);
+    // 椅·银色弯管架（撬脚式）：4 竖腿 + 底部纵撬脚 + 管脚套（随椅子旋转）
+    const cframe=new THREE.Group();
+    cframe.position.set(cx,0,cz); cframe.rotation.y=chairRot;
+    const cLX=0.215, cLZ=0.18;
+    [[cLX,cLZ],[-cLX,cLZ],[cLX,-cLZ],[-cLX,-cLZ]].forEach(([lx,lz])=>{
+      const leg=new THREE.Mesh(cLegTubeGeo,steelMat); leg.position.set(lx,0.24,lz); leg.castShadow=true; cframe.add(leg);
+      const ft =new THREE.Mesh(cFootGeo,footMat);      ft.position.set(lx,0.016,lz); ft.castShadow=true; cframe.add(ft);
     });
+    [-cLX,cLX].forEach(lx=>{
+      const run=new THREE.Mesh(cRunTubeGeo,steelMat); run.position.set(lx,0.04,0); run.castShadow=true; cframe.add(run);
+    });
+    scene.add(cframe);
 
     // Books — varied positions, slight rotations, some stacked askew
     const numBooks=1+Math.floor(idx%3);

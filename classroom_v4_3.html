@@ -4635,8 +4635,8 @@ function applyMove(dt){
   if(moveKeys.a){ dx-=rx; dz-=rz; }
   if(dx||dz){
     const len=Math.hypot(dx,dz)||1;
-    panX=Math.max(-6, Math.min(6,  panX + dx/len*speed));   // 限制在房间内
-    panZ=Math.max(-4, Math.min(12, panZ + dz/len*speed));
+    panX += dx/len*speed;   // 自由漫游：不再钳制在房间内，WASD 可任意移动到任何位置
+    panZ += dz/len*speed;
   }
   // Q 下降 / E 上升（垂直升降注视点与相机）
   let dy=0;
@@ -7939,7 +7939,7 @@ if(driftOn){
 
   // ── 影院化太阳轨迹（忽略真实地理，最大化"光照进来"的光影与色彩变化）──────────────
   // 光始终从窗侧(−X)射入：清晨低斜暖金 → 正午高位白光 → 傍晚低斜橙红 → 夜晚熄灭。
-  const DAWN = 0.06, DUSK = 0.86;                        // 日出 / 日落对应的 dayPhase
+  const DAWN = 0.10, DUSK = 0.90;                        // 日出 / 日落对应的 dayPhase（对称于 0.5：让仰角峰值与方位正午 sweep=0 重合，弧线对称）
   // 白昼包络：夜=0，日出→1(正午)→0(日落)，平滑正弦弧
   const dayUp = (dayPhase > DAWN && dayPhase < DUSK)
     ? Math.sin(Math.PI * (dayPhase - DAWN) / (DUSK - DAWN))
@@ -7982,14 +7982,25 @@ if(driftOn){
   document.getElementById('mInt').value   = Math.max(0, Math.min(5, sunCeil,
       curI + (targetIntensity - curI) * lerpSpeed)).toFixed(3);
 
-  // 光源位置：太阳恒在左窗外(-x)，沿窗墙(z)东升西落地扫掠且夹在前后墙之间(z∈[-1,13])，
-  // 仰角随高度低→高→低。光只从侧窗斜射进来，绝不会绕到后墙/前墙背后漏光。
-  if(dayUp === 0){
-    // 夜间：太阳移出视野（窗外远处不可见），避免光源停在最后一帧位置
-    mainLight.position.set(-30, 0, 0);
-  } else {
-    // 与静态路径一致：沿基准方向外推 SUN_DIST 倍，修复阴影漏光（正午≈71° 顶光）
+  // 光源位置：白天沿窗墙(z)东升西落，仰角低→高→低；夜间沿同一圆轨连续沉入地平线以下(y<0)
+  // 再从东端升起 → 真正的 0–360° 连续昼夜圆。夜间 intensity=0(无光即无阴影)，故不触碰白天的阴影精度。
+  if(dayUp > 0){
+    // —— 白天：与静态 sync() 逐字节一致的地上弧（未改，SUN_DIST 防漏光原样保留）——
     mainLight.position.set(0 + (-9-0)*SUN_DIST, 0.4 + (1.0+sunHeight01*26-0.4)*SUN_DIST, 6 + (sweep*7)*SUN_DIST);
+  } else {
+    // —— 夜间：地下半圆，从日落(西端)连续绕到次日日出(东端)。端点 y=2.8、z 与白天弧首尾相接，无跳变 ——
+    const nightSpan = (1 - DUSK) + DAWN;                          // 夜长(dayPhase 计)
+    const nightProg = (dayPhase >= DUSK)
+      ? (dayPhase - DUSK) / nightSpan                             // 0.90→1.0 : 0→0.5
+      : (dayPhase + (1 - DUSK)) / nightSpan;                      // 0.0→0.10 : 0.5→1（跨 0 点连续）
+    const zDusk = 6 + ((DUSK - 0.5) * 2 * 7) * SUN_DIST;          // 日落 z（西端，接白天弧末端）
+    const zDawn = 6 + ((DAWN - 0.5) * 2 * 7) * SUN_DIST;          // 日出 z（东端，接白天弧起点）
+    const NIGHT_DEPTH = 30;                                       // 午夜太阳沉到地平线以下的深度
+    mainLight.position.set(
+      (-9) * SUN_DIST,                                            // x 与白天一致（恒在左窗外）
+      2.8 - Math.sin(Math.PI * nightProg) * NIGHT_DEPTH,          // y：2.8(地平)→ -27.2(午夜地下)→ 2.8
+      zDusk + (zDawn - zDusk) * nightProg                         // z：西端 → 东端（连续，跨 0 点不跳）
+    );
   }
   mainLight.target.position.set(0, 0.4, 6);
   mainLight.target.updateMatrixWorld();

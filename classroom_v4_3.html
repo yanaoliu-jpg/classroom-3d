@@ -6047,6 +6047,50 @@ const STEP_H = 0.18;   // 台高（供讲桌抬升复用）
   scene.add(stepShadow);
 }
 
+// ── 讲桌上的道具：白粉笔盒 + 彩色粉笔盒 + 抹布 ────────────────────────────────────
+{
+  const PTX=0, PTZ=-RD/2+8.2, PTY=1.163;     // 讲桌台面中心 x/z 与上表面世界高度 y
+  const boxWhite = mat(0xe7ebf0, 0.78);      // 白粉笔盒（浅蓝白纸盒）
+  const boxColor = mat(0xe0cb98, 0.74);      // 彩色粉笔盒（牛皮纸盒）
+  const chalkW   = mat(0xf4f4ee, 0.85);      // 白粉笔
+  const ragMat   = mat(0x6f8f88, 0.96);      // 抹布（旧毛巾·灰绿）
+  const chalkC   = [mat(0xd94f4f,0.85), mat(0xe8c24a,0.85), mat(0x4f86d9,0.85), mat(0x5bb56a,0.85)]; // 红黄蓝绿
+
+  // 白粉笔盒 + 3 根白粉笔横放（讲台右上角：+x 右侧、-z 靠黑板远端）
+  add(new THREE.BoxGeometry(0.105,0.030,0.058), boxWhite, PTX+1.10, PTY+0.015, PTZ-0.26, 0, 0.15, 0);
+  for(let i=0;i<3;i++)
+    add(new THREE.CylinderGeometry(0.0058,0.0058,0.066,10), chalkW, PTX+1.10+(i-1)*0.004, PTY+0.036, PTZ-0.26+(i-1)*0.016, 0, 0.15, Math.PI/2);
+
+  // 彩色粉笔盒 + 4 根彩色粉笔（紧挨白粉笔盒，同在右上角）
+  add(new THREE.BoxGeometry(0.105,0.030,0.058), boxColor, PTX+1.28, PTY+0.015, PTZ-0.14, 0, -0.10, 0);
+  for(let i=0;i<4;i++)
+    add(new THREE.CylinderGeometry(0.0058,0.0058,0.066,10), chalkC[i], PTX+1.28+(i-1.5)*0.008, PTY+0.036, PTZ-0.14+(i-1.5)*0.011, 0, -0.10, Math.PI/2);
+
+  // 抹布（两层薄布叠出褶皱）
+  add(new THREE.BoxGeometry(0.15,0.016,0.12),  ragMat, PTX+0.70, PTY+0.008, PTZ-0.02, 0.0,  0.5, 0.0);
+  add(new THREE.BoxGeometry(0.11,0.014,0.085), ragMat, PTX+0.73, PTY+0.020, PTZ-0.05, 0.04, 0.9, 0.02);
+}
+
+// ── 地上的几个书包（放在过道 / 桌旁）────────────────────────────────────────────
+function makeBackpack(cx, cz, ry, cB, cP){
+  const g=new THREE.Group();
+  const bodyMat=mat(cB,0.80), pocketMat=mat(cP,0.76), strapMat=mat(0x26262a,0.70);
+  const m=(geo,material,x,y,z)=>{ const me=new THREE.Mesh(geo,material); me.position.set(x,y,z); me.castShadow=true; me.receiveShadow=true; g.add(me); };
+  m(roundedBox(0.30,0.40,0.18,0.05,3), bodyMat,   0, 0.22, 0);        // 主袋
+  m(roundedBox(0.30,0.13,0.19,0.06,3), bodyMat,   0, 0.42, 0.004);    // 顶盖
+  m(roundedBox(0.22,0.18,0.05,0.03,2), pocketMat, 0, 0.13, 0.100);    // 前袋
+  [-0.07,0.07].forEach(sx=> m(roundedBox(0.05,0.34,0.03,0.015,1), strapMat, sx, 0.24, -0.10)); // 背带
+  const h=new THREE.Mesh(new THREE.TorusGeometry(0.032,0.011,8,14), strapMat);
+  h.position.set(0,0.49,-0.02); h.rotation.x=Math.PI/2; h.castShadow=true; g.add(h);            // 提手
+  g.position.set(cx,0,cz); g.rotation.y=ry;   // 直立放在地上
+  scene.add(g);
+}
+// 立着放在各自桌子的侧边（紧贴桌腿）
+makeBackpack( 0.62, 4.0, 0.40, 0x2f3e6b, 0xb23b3b);  // 学生桌右侧·藏青+红
+makeBackpack(-3.66, 2.0,-0.40, 0x6a3030, 0x8a8f96);  // -3.05 桌左侧·暗红+灰
+makeBackpack( 3.66, 6.0, 0.50, 0x2e5f45, 0x244d38);  //  3.05 桌右侧·墨绿
+makeBackpack(-0.62, 6.0,-0.30, 0x455a70, 0xd98a3a);  //  0 桌左侧·蓝灰+橙
+
 // ── 卫生角（教室前方右墙角：扫帚 / 拖把 / 水桶 / 簸箕）──────────────────────────────
 // 前方=黑板墙(z=-5)，右侧=右墙(x=+7)。清洁用具靠两面墙斜立在墙角。
 {
@@ -8306,6 +8350,28 @@ document.addEventListener('keydown', e=>{
   if(e.key==='4') applyPreset('night');
 });
 
+// ── 固定机位：数字键切到预设广角视角（相机由全局 theta/phi/camR/panX/panZ/panY + 每机位 fov 驱动）──
+const CAM_VIEWS = {
+  '5': { name:'全景概览',    fov:68, theta:-0.22,   phi:0.09, camR:11.0, panX: 0.0, panZ: 1.0, panY: 0.30 },
+  '6': { name:'教师视角',    fov:72, theta:Math.PI, phi:0.03, camR: 6.5, panX: 0.0, panZ: 3.0, panY: 0.15 },
+  '7': { name:'后→前 广角', fov:78, theta:0.0,     phi:0.03, camR:11.5, panX: 0.0, panZ: 0.0, panY:-0.10 },
+  '9': { name:'侧窗全景',    fov:70, theta:2.20,    phi:0.14, camR: 8.5, panX:-2.0, panZ: 4.0, panY: 0.30 },
+};
+const camLabel = document.createElement('div');
+camLabel.style.cssText = 'position:fixed;left:50%;top:64px;transform:translateX(-50%);padding:6px 14px;background:rgba(0,0,0,0.55);color:#fff;font:14px/1.4 system-ui,sans-serif;letter-spacing:1px;border-radius:6px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:60;';
+document.body.appendChild(camLabel);
+let camLabelTimer;
+function showCamLabel(t){ camLabel.textContent=t; camLabel.style.opacity='1'; clearTimeout(camLabelTimer); camLabelTimer=setTimeout(()=>{camLabel.style.opacity='0';},1500); }
+document.addEventListener('keydown', e=>{
+  if(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  const v = CAM_VIEWS[e.key];
+  if(!v) return;
+  theta=v.theta; phi=v.phi; camR=v.camR; panX=v.panX; panZ=v.panZ; panY=v.panY;
+  if(v.fov){ camera.fov=v.fov; camera.updateProjectionMatrix(); }  // 广角：每机位可带自己的 FOV
+  updateCam();
+  showCamLabel('机位 '+e.key+'　'+v.name);
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 // DEBUG 可视化工具（默认关闭，对正式画面无影响）
 //   键位：U=UV棋盘  I=逐网格随机色  O=线框  P=打印相机参数到控制台  0=全部还原  R=报告模式
@@ -8496,6 +8562,7 @@ document.addEventListener('keydown', e=>{
       try{ sync(); }catch(e){}
     }
     setView({theta:num('theta'),phi:num('phi'),camR:num('camR'),panX:num('panX'),panZ:num('panZ'),panY:num('panY')});
+    if(hp.has('fov')){ camera.fov=num('fov'); camera.updateProjectionMatrix(); }  // 广角调试：URL 加 &fov=68
     if(hp.has('dbg')) apply(hp.get('dbg'));
   }
   hud();

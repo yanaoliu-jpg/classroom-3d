@@ -5030,9 +5030,9 @@ function corrGlowMat(color, baseEmis, emisMax){
   return m;
 }
 // 走廊地面 / 吊顶 / 外墙 / 两端封口 —— 用 emissive 自发光模拟“被走廊灯照亮”，不向教室投真实光(避免穿墙泄漏)
-const corrFloorMat = corrGlowMat(0xb7b1a4, 0.04, 0.42);
-const corrCeilMat  = corrGlowMat(0xeef0ea, 0.05, 0.70);
-const corrWallMat  = corrGlowMat(0xdadfd4, 0.04, 0.58);
+const corrFloorMat = corrGlowMat(0xb7b1a4, 0.03, 0.22);   // emisMax 0.42→0.22：走廊地面配套降亮，整体走廊入夜为柔和暗调
+const corrCeilMat  = corrGlowMat(0xeef0ea, 0.04, 0.34);   // emisMax 0.70→0.34：走廊顶(透高窗最抢眼)降亮，深夜不再过曝成死白
+const corrWallMat  = corrGlowMat(0xdadfd4, 0.03, 0.28);   // emisMax 0.58→0.28：走廊墙(透窗主体)降亮，让真实 corridorLight 的明暗层次显出来
 (()=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(CORR_D, CORR_LEN), corrFloorMat);  // 修复：宽高写反了——原(CORR_LEN,CORR_D)使走廊地面变成 14宽(X)×1.9(Z) 横跨整个房间+伸出室外，被太阳直射成"发白大平面"(室外低角度可见)；正确为 1.9宽(X)×14长(Z) 的走廊条
   m.rotation.x=-Math.PI/2; m.position.set(CORR_CX, 0.0, CORR_CZ); scene.add(m); })();            // 地面
 (()=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(CORR_D, CORR_LEN), corrCeilMat);  // 同上修复：走廊吊顶(用户说的"上面那条白")也是宽高写反、横跨房间
@@ -8281,9 +8281,11 @@ if(driftOn){
     const lvl01 = Math.min(1, lvl);
     // 室内"实际亮度"门：白昼(自然光足)→1；夜间/午休拉帘(室内暗)→0
     const spillGate = Math.max(0, 1 - envGate * curtainDim);
-    // 走廊面/灯板透过高窗可见，但"相对亮度"随室内明暗变化：白昼被日光压到 ~35%(只是普通室内光，
-    // 绝不会比晒亮的教室更白)；夜间室内暗→满亮发光。修复"上午透窗看到一大块白"。
-    const corrVis = 0.35 + 0.65 * spillGate;
+    // 走廊面/灯板透过高窗可见。早前把夜间 corrVis 拉到 1.0(满亮)，让走廊平面 emissive 在深夜暗室里
+    // 过曝成一整块"死白长方块"(用户报告：深夜右墙高窗光异常)。改为恒定 0.30：走廊只维持普通"被灯照亮"
+    // 的亮度，夜里靠"暗室对比 + 真实 corridorLight 的自然衰减"自然凸显成柔和窗光，而非发光屏。
+    // (白昼原为 0.35，现 0.30 更低→更不会透窗成大白块；日间窗光仍由 rWin/日光主导，见 noon 实测 board≈197 不变暗。)
+    const corrVis = 0.30;
     corrGlowMats.forEach(g => {
       g.m.emissiveIntensity = (g.baseEmis + (g.emisMax - g.baseEmis) * lvl01) * corrVis;
     });

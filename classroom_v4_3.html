@@ -5033,16 +5033,23 @@ function corrGlowMat(color, baseEmis, emisMax){
 const corrFloorMat = corrGlowMat(0xb7b1a4, 0.03, 0.22);   // emisMax 0.42→0.22：走廊地面配套降亮，整体走廊入夜为柔和暗调
 const corrCeilMat  = corrGlowMat(0xeef0ea, 0.04, 0.34);   // emisMax 0.70→0.34：走廊顶(透高窗最抢眼)降亮，深夜不再过曝成死白
 const corrWallMat  = corrGlowMat(0xdadfd4, 0.03, 0.28);   // emisMax 0.58→0.28：走廊墙(透窗主体)降亮，让真实 corridorLight 的明暗层次显出来
+// 走廊各面 receiveShadow=true：走廊是右墙外的室内空间，本应被右墙挡住教室的太阳、只靠自身
+// emissive+走廊灯照亮。原来这些面没开 receiveShadow → 方向光(暖阳)直射走廊地面/外墙，把它照成
+// 一条"发光的粉白亮带"(用户反馈"换成楼道材质 不发光")。开 receiveShadow 后右墙的影子正常落在
+// 走廊面上，走廊回到自身柔和暗调；材质本身不再改。
 (()=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(CORR_D, CORR_LEN), corrFloorMat);  // 修复：宽高写反了——原(CORR_LEN,CORR_D)使走廊地面变成 14宽(X)×1.9(Z) 横跨整个房间+伸出室外，被太阳直射成"发白大平面"(室外低角度可见)；正确为 1.9宽(X)×14长(Z) 的走廊条
-  m.rotation.x=-Math.PI/2; m.position.set(CORR_CX, 0.0, CORR_CZ); scene.add(m); })();            // 地面
+  m.rotation.x=-Math.PI/2; m.position.set(CORR_CX, 0.0, CORR_CZ); m.receiveShadow=true; scene.add(m); })();            // 地面
 (()=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(CORR_D, CORR_LEN), corrCeilMat);  // 同上修复：走廊吊顶(用户说的"上面那条白")也是宽高写反、横跨房间
-  m.rotation.x=Math.PI/2;  m.position.set(CORR_CX, RH-0.04, CORR_CZ); scene.add(m); })();         // 吊顶
+  // castShadow：走廊顶要挡光。太阳从教室侧越过右墙顶(3.5m)斜射进走廊、照亮走廊外墙上部——
+  // 透过右墙高窗看过去就是"一整块发亮的墙"(用户反馈"换成普通墙体 不发光")。给走廊顶开 castShadow，
+  // 它把这束越顶阳光挡在走廊外，外墙回到自身柔和暗调(emissive+走廊灯)，不再是发光亮板。
+  m.rotation.x=Math.PI/2;  m.position.set(CORR_CX, RH-0.04, CORR_CZ); m.receiveShadow=true; m.castShadow=true; scene.add(m); })();         // 吊顶
 (()=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(CORR_LEN, RH), corrWallMat);
-  m.rotation.y=-Math.PI/2; m.position.set(CORR_X1, RH/2, CORR_CZ); scene.add(m); })();            // 外墙(法线朝走廊内)
+  m.rotation.y=-Math.PI/2; m.position.set(CORR_X1, RH/2, CORR_CZ); m.receiveShadow=true; scene.add(m); })();            // 外墙(法线朝走廊内)
 (()=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(CORR_D, RH), corrWallMat);
-  m.position.set(CORR_CX, RH/2, CORR_Z0); scene.add(m); })();                                     // z- 封口(法线+z)
+  m.position.set(CORR_CX, RH/2, CORR_Z0); m.receiveShadow=true; scene.add(m); })();                                     // z- 封口(法线+z)
 (()=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(CORR_D, RH), corrWallMat);
-  m.rotation.y=Math.PI;    m.position.set(CORR_CX, RH/2, CORR_Z1); scene.add(m); })();            // z+ 封口(法线-z)
+  m.rotation.y=Math.PI;    m.position.set(CORR_CX, RH/2, CORR_Z1); m.receiveShadow=true; scene.add(m); })();            // z+ 封口(法线-z)
 
 // 一排吸顶灯(4 盏)：自发光灯板 + 下方淡光晕，沿走廊吊顶等距排列
 const fixtureZ = [-2, 1, 4, 7];
@@ -6413,7 +6420,7 @@ const extMats=[];  // 窗外景物材质：随昼夜整体明暗（夜晚压暗�
 // ── 窗墙遮光体 (real sunlight shaping) ────────────────────────────────────────
 // 关键真实性：原本左墙是一整块不投影的平面，直射阳光会均匀灌满全屋。
 // 这里在墙外侧贴一圈"墙体减去窗洞"的投影遮挡板(castShadow)，太阳只能从窗洞射入，
-// 配合本就投影的窗框/中梃，地面会出现随太阳方位移动的、真实的窗格光斑与栅格阴影。
+// 在地面/墙面形成随太阳方位移动的、干净的矩形光斑（窗为整块清玻璃，无中梃 → 光斑无栅格）。
 // 这些板位于室外、被不透明的室内墙面与窗外景物挡住，相机看不到，只参与阴影投射。
 {
   const occMat = new THREE.MeshStandardMaterial({ color: 0x202020, roughness: 1 });
@@ -6579,7 +6586,9 @@ winPositions.forEach((wz,wi)=>{
 });
 
 // ── WINDOW LIGHT SHAFTS + GRID SHADOWS ───────────────────────────────────────
-// 窗格投影纹理：匹配新窗格布局（上小格3列、下大格2×2、帘子阴影）
+// 窗光投影纹理：单块清玻璃大窗（无中梃/无窗帘）→ 干净柔和的暖色光斑。
+// 注意：窗户已改为「只有玻璃」的整块清窗（中梃/横梁移除，见下方窗户构建；窗帘功能也已整体移除），
+// 因此这里不再画任何窗框/中梃栅格线或帘子阴影——否则墙面/地面光斑会出现与真实窗户不符的"网格影"。
 function makeWindowLightTex(){
   const s = 512;
   const cv = document.createElement('canvas'); cv.width = s; cv.height = s;
@@ -6591,53 +6600,11 @@ function makeWindowLightTex(){
   baseGrd.addColorStop(1, 'rgba(255,228,160,1)');
   ctx.fillStyle = baseGrd; ctx.fillRect(0,0,s,s);
 
-  // 帘子阴影（左右各占约28%，蓝色调暗）
-  const curtainW = s * 0.28;
-  ctx.fillStyle = 'rgba(40,60,100,0.55)';
-  ctx.fillRect(0, 0, curtainW, s);            // 左帘
-  ctx.fillRect(s - curtainW, 0, curtainW, s); // 右帘
-
-  // 帘边软渐变（光透过帘布边缘）
-  const leftBlend = ctx.createLinearGradient(curtainW, 0, curtainW + s*0.06, 0);
-  leftBlend.addColorStop(0, 'rgba(40,60,100,0.3)');
-  leftBlend.addColorStop(1, 'rgba(40,60,100,0)');
-  ctx.fillStyle = leftBlend;
-  ctx.fillRect(curtainW, 0, s*0.06, s);
-
-  const rightBlend = ctx.createLinearGradient(s-curtainW, 0, s-curtainW-s*0.06, 0);
-  rightBlend.addColorStop(0, 'rgba(40,60,100,0.3)');
-  rightBlend.addColorStop(1, 'rgba(40,60,100,0)');
-  ctx.fillStyle = rightBlend;
-  ctx.fillRect(s-curtainW-s*0.06, 0, s*0.06, s);
-
-  // ── 框架阴影线（粗，对应窗框） ──
-  ctx.fillStyle = 'rgba(0,0,0,0.72)';
-  // 外框
-  ctx.fillRect(0, 0, s, 10);
-  ctx.fillRect(0, s-10, s, 10);
-  ctx.fillRect(0, 0, 10, s);
-  ctx.fillRect(s-10, 0, 10, s);
-
-  // 上下分隔横梁（占高度68%处）
-  const sepY = s * 0.32; // 纹理上方32%对应窗上扇（投影时上下翻转）
-  ctx.fillStyle = 'rgba(0,0,0,0.65)';
-  ctx.fillRect(0, sepY - 4, s, 8);
-
-  // 下扇：1根竖中梃 + 1根横中梃
-  ctx.fillStyle = 'rgba(0,0,0,0.58)';
-  ctx.fillRect(s/2 - 3, sepY, 6, s - sepY);        // 竖中梃
-  ctx.fillRect(0, sepY + (s-sepY)*0.5 - 3, s, 6);  // 横中梃（下扇中间）
-
-  // 上扇：2根细竖梃（三等分）
-  ctx.fillStyle = 'rgba(0,0,0,0.48)';
-  ctx.fillRect(s*0.33 - 2, 0, 5, sepY);
-  ctx.fillRect(s*0.67 - 2, 0, 5, sepY);
-
-  // ── 光晕柔化（整体边缘压暗，中间提亮） ──
-  const vgrd = ctx.createRadialGradient(s/2, s*0.55, s*0.05, s/2, s*0.55, s*0.62);
-  vgrd.addColorStop(0,   'rgba(255,248,210,0.12)');
-  vgrd.addColorStop(0.7, 'rgba(255,240,180,0)');
-  vgrd.addColorStop(1,   'rgba(0,0,0,0.22)');
+  // 柔和光晕：中间亮、四周渐隐 → 单块清玻璃的软边光斑（无硬窗框/无栅格）
+  const vgrd = ctx.createRadialGradient(s/2, s*0.5, s*0.06, s/2, s*0.5, s*0.64);
+  vgrd.addColorStop(0,   'rgba(255,248,210,0.14)');
+  vgrd.addColorStop(0.62,'rgba(255,240,180,0)');
+  vgrd.addColorStop(1,   'rgba(0,0,0,0.30)');
   ctx.fillStyle = vgrd; ctx.fillRect(0,0,s,s);
 
   return new THREE.CanvasTexture(cv);
@@ -6827,17 +6794,11 @@ function updateWindowPatches(angleDeg, sunElev){
   });
 }
 
-// Light entering — subtle desk-surface highlights from window side
-winPositions.forEach(wz=>{
-  const worldZ=-RD/2+6+RD/2+wz;
-  const bar=new THREE.Mesh(
-    new THREE.PlaneGeometry(0.9,3.8),
-    new THREE.MeshBasicMaterial({color:0xfff4cc,transparent:true,opacity:0.038,depthWrite:false})
-  );
-  bar.rotation.x=-Math.PI/2; bar.rotation.z=0.15;
-  bar.position.set(-RW/2+2.8,0.02,worldZ);
-  scene.add(bar);
-});
+// Light entering — 窗侧"进光高光带"已移除：
+// 这三条(每扇窗一条) PlaneGeometry(0.9,3.8) 是 MeshBasicMaterial 无光贴片、固定 opacity 0.038、
+// 平铺在地面 y=0.02 且从不被渲染循环更新 → 无论太阳角度/强度怎么变都恒定不动，
+// 在暗场景里读成"三块一模一样、不随光变的地面光影"(用户反馈)。真实窗光(方向光+窗洞)已自然照亮地面，
+// 这三条假高光带纯属冗余伪影，直接删除。
 
 // 白色半透遮光帘（Stage 9）已删除：窗帘/关窗遮光功能整体移除，窗户始终不遮光。
 
@@ -6848,7 +6809,7 @@ winPositions.forEach(wz=>{
 // planes. The texture is organic blobs. In the render loop we oscillate their
 // opacity and slightly shift position to simulate breeze.
 
-function makeDappleTex(seed){
+function makeDappleTex(seed, withGlints=true){
   const s = 256;
   const cv = document.createElement('canvas'); cv.width = cv.height = s;
   const ctx = cv.getContext('2d');
@@ -6879,7 +6840,9 @@ function makeDappleTex(seed){
     ctx.restore();
   }
   // A few bright specular glints (the "holes" in canopy that let direct sun through)
-  const glints = 4 + Math.floor(rnd()*5);
+  // withGlints=false（地面斑用）：场景外没有真实树冠，这些暖白亮点会读成"漂浮光点"浮在地板上
+  // (用户反馈；与已隐藏的 wallDapple 同一问题)——地面只保留柔和叶影暗斑，去掉亮点。
+  const glints = withGlints ? (4 + Math.floor(rnd()*5)) : 0;
   for(let i=0; i<glints; i++){
     const gx = rnd()*s, gy = rnd()*s;
     const gr = 3 + rnd()*7;
@@ -6909,7 +6872,7 @@ const dappleFloorDefs = [
 
 dappleFloorDefs.forEach(({ x, z, w, d, seed, phase }) => {
   const mat2 = new THREE.MeshBasicMaterial({
-    map: makeDappleTex(seed),
+    map: makeDappleTex(seed, false),   // 地面斑不画亮点(glints)：无树冠来源→亮点会成"漂浮光点"，只留柔和叶影暗斑
     transparent: true,
     opacity: 0.38,
     depthWrite: false,
@@ -7042,9 +7005,18 @@ const fluoroLights = [];   // 每组灯具下方一盏点光源（12 盏，位�
   // 加宽至盖住主地板与前墙之间的缝隙（原本 z∈[6,8.5] 无地板，会露出黑色背景）
   const exFloorZ = 9.5;           // centre of the extra strip
   const exFloorD = 8.0;           // depth of strip → 覆盖 z∈[5.5,13.5]，与主地板重叠 0.5
+  // 关键：extraFloor 必须与主地板视觉无缝——同反照率(0xaaa69b)/粗糙度(0.50)/法线&粗糙贴图。
+  // 之前用 0xd8d4cc + 无法线/粗糙贴图 + roughness0.94 → 一块更亮更哑的"平板方块"，接缝在 z=6，
+  // 且不随光照角度变化(用户反馈"自定义模式无论怎么调光角都有这块光影")。
+  // 贴图需换算 repeat/offset：主地板 depth=RD、repeat=6；本条 depth=exFloorD，
+  // 故 repeat.y=6*exFloorD/RD 保持"每米砖数"一致，offset.y 让砖缝在 z=6 接缝处对齐。
+  const exTex = floorTex.clone(), exNrm = floorNormal.clone(), exRgh = floorRough.clone();
+  const exRepY = 6 * exFloorD / RD;
+  const exOffY = (6 - (exFloorZ + exFloorD/2)) * (6 / RD);
+  [exTex, exNrm, exRgh].forEach(t=>{ t.repeat.set(6, exRepY); t.offset.set(0, exOffY); t.needsUpdate = true; });
   const extraFloor = new THREE.Mesh(
     new THREE.PlaneGeometry(RW, exFloorD),
-    mat(0xd8d4cc, 0.94, 0, floorTex)
+    mat(0xaaa69b, 0.50, 0.02, exTex, exNrm, exRgh)
   );
   extraFloor.rotation.x = -Math.PI/2;
   // 略低于主地板，重叠区由主地板覆盖，避免 z-fighting 闪烁

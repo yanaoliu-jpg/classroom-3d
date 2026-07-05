@@ -5124,13 +5124,19 @@ winFloor.renderOrder = 3; // 固定为最上层透明绘制：与下方 floorMir
 winFloor.visible = false;
 scene.add(winFloor);
 corrLeak.floor = { mat: winFloorMat, max: 0.0 };  // 0.20→0：彻底不再驱动该光斑
-// 窗下墙面光晕(光打在窗下墙上的柔光)
+// 窗下墙面光晕(光打在窗下墙上的柔光)——已停用。
+// 这是一张 MeshBasicMaterial(不受光照的恒定亮度)贴片：有其它光时是"淡淡柔光"能融入，
+// 但 custom 关掉太阳+吊顶后室内纯黑时，它的 0.18 白veil 反成全屏最亮物体(再被 bloom 拉白),
+// 在右墙窗下浮出一块"死白长方形"(用户报告：custom 只开走廊灯的光影异常)。
+// 与其同类的 winFloor 早因相同原因停用；且窗下墙面已由真实光源 rWin(走廊面光源)+winSpot 自然照亮,
+// 该假贴片纯属冗余。故 max=0 且 visible=false 彻底停用(留几何体不删,便于回溯)。
 const winWallMat = new THREE.MeshBasicMaterial({ color:0xe6eefb, transparent:true, opacity:0.0, depthWrite:false });
 const winWall = new THREE.Mesh(new THREE.PlaneGeometry(RWIN_W+0.5, 1.1), winWallMat);
 winWall.rotation.y = -Math.PI/2;
 winWall.position.set(RW/2-0.03, WIN_YB-0.6, WIN_CZ);
+winWall.visible = false;
 scene.add(winWall);
-corrLeak.wall = { mat: winWallMat, max: 0.18 };
+corrLeak.wall = { mat: winWallMat, max: 0.0 };  // 0.18→0：不再驱动该假光晕贴片
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── 墙裙(踢脚线以上约1m 浅米黄乳胶漆) + 踢脚线 ────────────────────────────────

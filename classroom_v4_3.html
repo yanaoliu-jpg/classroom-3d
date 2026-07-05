@@ -5032,6 +5032,16 @@ const RWALL_CZ = (RWALL_Z0+RWALL_Z1)/2;
   hole.moveTo(WIN_Z0, WIN_YB); hole.lineTo(WIN_Z1, WIN_YB);
   hole.lineTo(WIN_Z1, WIN_YT); hole.lineTo(WIN_Z0, WIN_YT); hole.lineTo(WIN_Z0, WIN_YB);
   shape.holes.push(hole);
+  // 门上半玻璃 → 真开口：在右墙对应位置挖洞，让门玻璃真正透到走廊(能看到走廊、走廊光/景透入)，
+  // 而非把清玻璃贴在实心墙上(否则玻璃背后仍是墙，被暖光照成一块"红/暗色的板"，走廊看不见、光进不来)。
+  // 洞略小于玻璃(0.8×0.98)，四周留边由门框/玻璃盖住；前门 z=-1.8、后门 z=8，与门代码一致。
+  const DGL_YB = 1.12, DGL_YT = 2.02, DGL_HW = 0.36;   // 玻璃洞：下沿/上沿/半宽(沿z)
+  [-1.8, 8].forEach(dz=>{
+    const dh = new THREE.Path();
+    dh.moveTo(dz-DGL_HW, DGL_YB); dh.lineTo(dz+DGL_HW, DGL_YB);
+    dh.lineTo(dz+DGL_HW, DGL_YT); dh.lineTo(dz-DGL_HW, DGL_YT); dh.lineTo(dz-DGL_HW, DGL_YB);
+    shape.holes.push(dh);
+  });
   const geo = new THREE.ShapeGeometry(shape);
   // ShapeGeometry 的 UV = 顶点原始坐标(z,y)；归一化到 0..1 后用 repeat(2,1)，与左墙同比例
   const uv = geo.attributes.uv;
@@ -5052,7 +5062,9 @@ const RWALL_CZ = (RWALL_Z0+RWALL_Z1)/2;
   dado.position.set(RWALL_CZ, (DADO_TOP+SKIRT_TOP)/2, 0.012); dado.receiveShadow = true; rightWall.add(dado);
   const skirtMat = mat(0xa79d8d, 0.65); skirtMat.side = THREE.DoubleSide;
   const skirt = new THREE.Mesh(new THREE.PlaneGeometry(RD, SKIRT_TOP), skirtMat);
-  skirt.position.set(RWALL_CZ, SKIRT_TOP/2, 0.018); rightWall.add(skirt);
+  skirt.position.set(RWALL_CZ, SKIRT_TOP/2, 0.018); skirt.receiveShadow = true; rightWall.add(skirt);
+  // ↑ receiveShadow：踢脚线必须和上方 dado 一样接收阴影。漏了它 → 太阳照到贴地踢脚线时它永不进阴影，
+  // 而墙体在阴影里发黑，右墙底部便浮出一条"随主光角度不变、始终发光的粉白亮带"(用户报告)。
 }
 
 // ════════ 右墙外走廊 + 高窗采光 ═══════════════════════════════════════════════
@@ -5097,14 +5109,20 @@ const corrWallMat  = corrGlowMat(0xdadfd4, 0.03, 0.28);   // emisMax 0.58→0.28
 
 // 一排吸顶灯(4 盏)：自发光灯板 + 下方淡光晕，沿走廊吊顶等距排列
 const fixtureZ = [-2, 1, 4, 7];
+const corrLampLights = [];   // 每盏吸顶灯下的真实点光源(替代原来那盏浮在后门口的孤光)：走廊由灯管发光照亮
 fixtureZ.forEach(z=>{
   const panelMat = new THREE.MeshStandardMaterial({ color:0xf6f8ff, emissive:0xeaf0ff, emissiveIntensity:0.05, roughness:0.4 });
-  corrGlowMats.push({ m:panelMat, baseEmis:0.1, emisMax:2.4 });
+  corrGlowMats.push({ m:panelMat, baseEmis:0.1, emisMax:2.4, isLamp:true });  // 灯板本体：随亮度电平(不封顶)变化，让"灯在变亮"直观
   const panel = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 1.0), panelMat);  // 沿 z 向长 1.0
   panel.position.set(CORR_CX, RH-0.10, z); scene.add(panel);
   // 灯罩边框
   const frm = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.06, 1.06), mat(0xb8bcc0,0.5,0.4));
   frm.position.set(CORR_CX, RH-0.105, z); scene.add(frm);
+  // 真实光源：贴在灯管正下方、朝下照亮走廊(灯管在发光 → 照亮墙/地/天花)，强度由走廊灯电平驱动。
+  // distance 限制在走廊尺度内(减少越过右墙渗入教室)；不投阴影(省性能)。
+  const lampLight = new THREE.PointLight(0xdbe6f2, 0, 4.2, 2);
+  lampLight.position.set(CORR_CX, RH-0.28, z);
+  scene.add(lampLight); corrLampLights.push(lampLight);
 });
 
 // ── 高窗：钢窗框 + 中竖框 + 半透玻璃 + 窗台 ─────────────────────────────────────
@@ -5198,6 +5216,7 @@ function addWainscot(wall, len){
   // 踢脚线：世界 y 0→0.12
   const skirt = new THREE.Mesh(new THREE.PlaneGeometry(len, SKIRT_TOP), skirtMat);
   skirt.position.set(0, SKIRT_TOP/2 - RH/2, 0.018);
+  skirt.receiveShadow = true;   // 与 dado 一致：踢脚线也要接收阴影，否则贴地踢脚线在阳光下永不进阴影，浮成发光亮带
   wall.add(skirt);
 }
 addWainscot(backWall,  RW);
@@ -5600,6 +5619,26 @@ function addDoorLayers(faceX, normalSign, cz, w, doorTopY, lowerBotY, lowerTopY)
   add(new THREE.BoxGeometry(0.05, 0.09, w+0.27), caseMat, xCase, doorTopY+0.155, cz);
 }
 
+// ── 门玻璃透走廊光（前后门通用）────────────────────────────────────────────────
+// 让上半门玻璃像真玻璃一样把走廊灯的光引入教室，追求物理自然：
+//   ① 真实面光源(RectAreaLight)贴在玻璃内侧、朝教室内 → 走廊灯的光真的投在门口地面/课桌上；
+//   ② 玻璃自发光随"室内暗度"显现 → 读作"背后透着走廊光"。
+// 整套由走廊灯电平驱动、冷白走廊光色(与右墙高窗 rWin/winGlass 同一范式)。强度克制：
+// 暗场景自然显、白天被日光自然盖过，不过曝、不违和。走廊关灯 → 全部归零。
+const DOOR_CORR_COLOR = 0xdfe8f5;   // 冷白走廊光（与 rWin 一致）
+const DOOR_RECT_MAX   = 1.0;        // 门玻璃面光源峰值(走廊满亮时)；比高窗更近更贴地，取更低值防门口地面过曝
+const DOOR_GLASS_MAX  = 0.0;        // 门玻璃改单块清玻璃后不再自发光(避免"发光的板"违和)；走廊光靠真实面光源投入 + 透过清玻璃看到被照亮的走廊
+const doorCorridorLeaks = [];
+function addDoorCorridorGlow(glassMat, faceX, cz, glassW, glassH, cy){
+  glassMat.emissive = new THREE.Color(DOOR_CORR_COLOR);
+  glassMat.emissiveIntensity = 0;                       // 由 render 循环随 spill 驱动
+  const rl = new THREE.RectAreaLight(DOOR_CORR_COLOR, 0, glassW, glassH);
+  rl.position.set(faceX - 0.04, cy, cz);                // 贴门玻璃内侧
+  rl.lookAt(faceX - 2.0, cy, cz);                       // 朝教室内(-x)，模拟透过玻璃进来的走廊漫光
+  scene.add(rl);
+  doorCorridorLeaks.push({ light: rl, glassMat });
+}
+
 // ── FRONT DOOR (right wall, near front) — 学校标准款：上玻璃下绿漆 ──────────
 {
   const FDZ2 = -1.8;   // 与板报对调：前门移到原板报位置（后门在 z=8，板报居中夹在两门之间）
@@ -5628,22 +5667,18 @@ function addDoorLayers(faceX, normalSign, cz, w, doorTopY, lowerBotY, lowerTopY)
   // 下板层次：双格凹陷芯板 + 凸起线脚 + 踢脚 + 外门套（替代原单调加强筋）
   addDoorLayers(FDX, -1, FDZ2, FDW, FDH, 0.0, 1.02);
 
-  // 上半玻璃区域 — 钢框分格（四格窗：2×2）
+  // 上半玻璃区域 — 一整块清玻璃（去十字中梃 + 去日光贴图，完全透光，与左墙窗一致）
   const fdGlassMat = new THREE.MeshStandardMaterial({
-    color: 0x8ab4c8, roughness: 0.05, metalness: 0.0,
-    transparent: true, opacity: 0.22, depthWrite: false
+    color: 0xd6e2ee, roughness: 0.04, metalness: 0.0,
+    transparent: true, opacity: 0.08, depthWrite: false
   });
-  const fdGlassFrame = mat(0xb8b0a0, 0.4, 0.15);
   const glassTop = FDH - 1.07;   // 玻璃区高度 ≈ 1.10m
   const glassY  = 1.05 + glassTop/2 + 0.03;
-  // 玻璃面板
+  // 玻璃面板（单块清玻璃，无中梃分格）
   const fdGlass = new THREE.Mesh(new THREE.BoxGeometry(0.02, glassTop, FDW-0.1), fdGlassMat);
   fdGlass.position.set(FDX, glassY, FDZ2);
   scene.add(fdGlass);
-  // 玻璃横中框
-  add(new THREE.BoxGeometry(0.045, 0.04, FDW-0.1), fdGlassFrame, FDX, 1.05 + glassTop*0.5 + 0.03, FDZ2);
-  // 玻璃竖中框
-  add(new THREE.BoxGeometry(0.045, glassTop, 0.04), fdGlassFrame, FDX, glassY, FDZ2);
+  addDoorCorridorGlow(fdGlassMat, FDX, FDZ2, FDW-0.1, glassTop, glassY);  // 前门玻璃透走廊光（真实面光源）
 
   // 铝合金拉手 — 横向长条
   const fdHandleMat = new THREE.MeshStandardMaterial({ color: 0xb0a890, roughness: 0.2, metalness: 0.75 });
@@ -5702,20 +5737,17 @@ scene.add(doorMesh);
 // 下板层次：双格凹陷芯板 + 凸起线脚 + 踢脚 + 外门套（替代原单调加强筋）
 addDoorLayers(doorX, -1, doorZ, doorW, doorH, 0.0, 1.02);
 
-// 上半玻璃区域
+// 上半玻璃区域 — 一整块清玻璃（去十字中梃 + 去日光贴图，完全透光，与左墙窗一致）
 const doorGlassMat = new THREE.MeshStandardMaterial({
-  color: 0x8ab4c8, roughness: 0.05, metalness: 0.0,
-  transparent: true, opacity: 0.22, depthWrite: false
+  color: 0xd6e2ee, roughness: 0.04, metalness: 0.0,
+  transparent: true, opacity: 0.08, depthWrite: false
 });
-const doorGlassFrame = mat(0xb8b0a0, 0.4, 0.15);
 const glassH = doorH - 1.07;
 const glassY = 1.05 + glassH/2 + 0.03;
 const doorGlass = new THREE.Mesh(new THREE.BoxGeometry(0.02, glassH, doorW-0.1), doorGlassMat);
 doorGlass.position.set(doorX, glassY, doorZ);
 scene.add(doorGlass);
-// 玻璃横中框 + 竖中框
-add(new THREE.BoxGeometry(0.045, 0.04, doorW-0.1), doorGlassFrame, doorX, 1.05 + glassH*0.5 + 0.03, doorZ);
-add(new THREE.BoxGeometry(0.045, glassH, 0.04), doorGlassFrame, doorX, glassY, doorZ);
+addDoorCorridorGlow(doorGlassMat, doorX, doorZ, doorW-0.1, glassH, glassY);  // 后门玻璃透走廊光（真实面光源）
 
 // 铝合金拉手
 const doorHandleMat = new THREE.MeshStandardMaterial({ color: 0xb0a890, roughness: 0.2, metalness: 0.75 });
@@ -6695,12 +6727,17 @@ winPositions.forEach((wz,wi)=>{
   const wallPatchMat=new THREE.MeshBasicMaterial({
     map:winLightTex, transparent:true, opacity:0.16, depthWrite:false
   });
-  const wallPatch=new THREE.Mesh(new THREE.PlaneGeometry(1.6,2.4),wallPatchMat);
-  wallPatch.rotation.y=-Math.PI/2;
-  wallPatch.position.set(RW/2-0.04, 2.0, worldZ);
-  wallPatch.userData.baseZ=worldZ;
-  scene.add(wallPatch);
-  winPatches.push(wallPatch);
+  // 跳过正对前门(z≈-1.8)/后门(z≈8)的墙面日光贴片：否则这张 winLightTex 贴片会盖在门玻璃上，
+  // 看起来像"门窗户上贴了一层图案"(用户报告)。门口的墙已被真实方向光/阴影自然照亮，无需假贴片。
+  const wallPatchNearDoor = Math.abs(worldZ-(-1.8))<1.0 || Math.abs(worldZ-8)<1.0;
+  if(!wallPatchNearDoor){
+    const wallPatch=new THREE.Mesh(new THREE.PlaneGeometry(1.6,2.4),wallPatchMat);
+    wallPatch.rotation.y=-Math.PI/2;
+    wallPatch.position.set(RW/2-0.04, 2.0, worldZ);
+    wallPatch.userData.baseZ=worldZ;
+    scene.add(wallPatch);
+    winPatches.push(wallPatch);
+  }
 
   // （光柱已移除：2D 平面无法从环绕相机下伪装成体积光，反而像漂浮的透明竖块。
   //   "光线射入"的氛围改由尘埃粒子(丁达尔)+窗口地面光斑承担。winShafts 保持空数组，
@@ -8280,9 +8317,8 @@ if(driftOn){
 
   // Lerp corridor light elements
   const corrLerp = 0.012;
-  const corrCurrent = corridorLight.intensity;
-  const corrNew = corrCurrent + (corridorTarget * 0.55 * Math.PI - corrCurrent) * corrLerp; // Task6 ×π 补偿 PointLight 物理单位
-  corridorLight.intensity = Math.max(0, corrNew);
+  // corridorLight(真实点光源)的强度改到下方 corrCtl 块，按「走廊灯亮度电平 lvl」驱动 —— 拖亮度时
+  // 是灯真的变亮/变暗并带衰减地照亮走廊，而非走廊面自发光一律明灭(用户反馈：调亮度像环境在变而非灯在变)。
   corridorElements.gap.opacity   = corridorElements.gap.opacity   + (corridorTarget * 0.70  - corridorElements.gap.opacity)   * corrLerp;
   corridorElements.spill.opacity = corridorElements.spill.opacity + (corridorTarget * 0.22 - corridorElements.spill.opacity) * corrLerp;
   corridorElements.edge.opacity  = corridorElements.edge.opacity  + (corridorTarget * 0.35 - corridorElements.edge.opacity)  * corrLerp;
@@ -8300,12 +8336,22 @@ if(driftOn){
     // 的亮度，夜里靠"暗室对比 + 真实 corridorLight 的自然衰减"自然凸显成柔和窗光，而非发光屏。
     // (白昼原为 0.35，现 0.30 更低→更不会透窗成大白块；日间窗光仍由 rWin/日光主导，见 noon 实测 board≈197 不变暗。)
     const corrVis = 0.30;
+    // 真实走廊灯(点光源)随亮度电平输出 → 调亮度就是"灯真的变亮/变暗"，带距离衰减地照亮走廊(灯下亮、远处暗)，
+    // 而非走廊面自发光一律明灭。峰值沿用原 on 时的 0.55π(亮度=1时与旧版一致)，亮度可上探到 1.5×。
+    // 走廊由「灯管正下方的真实点光源」照亮(灯在发光→照亮环境)，不再用那盏浮在后门口的孤光——
+    // 它会把后门玻璃/门框照亮成"门在自发光/门上装了个光源"(用户报告：从走廊看后窗发光)。
+    corridorLight.intensity = 0;                       // 原门口点光源停用(仅保留引用，不再照明)
+    corrLampLights.forEach(L => { L.intensity = Math.max(0, lvl * 0.42 * Math.PI); });
     corrGlowMats.forEach(g => {
-      // 走廊自发光整体随开关电平(lvl01)缩放：关走廊灯(lvl01→0)时 emissive 归零，
-      // 透过高窗看走廊不再残留一圈辉光(用户报告"关走廊灯后窗户还发光")。
-      // 早前写成 baseEmis + (emisMax-baseEmis)*lvl01：lvl01=0 仍留 baseEmis*corrVis 的"关不掉的地板亮度"，
-      // 在纯黑夜景里就成了透窗的绿灰辉光。满亮(lvl01=1)时两式相等(baseEmis 抵消)，故峰值观感不变。
-      g.m.emissiveIntensity = g.emisMax * lvl01 * corrVis;
+      // 关走廊灯(lvl→0)时 emissive 归零，透过高窗/门看走廊不再残留辉光(用户报告"关走廊灯后窗户还发光")。
+      if (g.isLamp){
+        // 灯板(灯具本体)：随亮度电平 lvl 变化且不封顶 → "灯在变亮"直观可见，是全走廊里变化最明显的元素。
+        g.m.emissiveIntensity = g.emisMax * lvl * corrVis;
+      } else {
+        // 走廊墙/地/顶：仅维持"被灯照亮"的底光，随电平缩放(lvl01 封顶避免过曝)。亮度的主观明暗层次
+        // 主要由上面的真实点光源体现，走廊面自发光只作陪衬，不再喧宾夺主地"整片一律明灭"。
+        g.m.emissiveIntensity = g.emisMax * lvl01 * corrVis;
+      }
     });
     // 「光投进教室」的部分（窗内聚光 + 地面/墙面光斑 + 玻璃辉光）只有在室内暗时才显著
     const spill = lvl * spillGate;
@@ -8319,6 +8365,12 @@ if(driftOn){
     if (typeof rWin !== 'undefined') {
       rWin.intensity = RECT_CORR * lvl01 * curtainDim;   // 走廊光柔和余量(非日光 RECT_MAX)，防止烤白窗下班级板报
       rWin.color.setHex(0xdfe8f5);
+    }
+    // 前后门玻璃透走廊光：面光源随走廊电平(与 rWin 同源，白天亦在、被日光自然盖过)；
+    // 玻璃自发光随 spill(仅室内暗时显现，避免"死白玻璃")。走廊关灯 → 两者归零。
+    for (const d of doorCorridorLeaks){
+      d.light.intensity            = DOOR_RECT_MAX  * lvl01 * curtainDim;
+      d.glassMat.emissiveIntensity = DOOR_GLASS_MAX * spill;
     }
   }
 

@@ -5097,6 +5097,11 @@ corrLeak.spot = { light: winSpot, max: 0.12 * Math.PI }; // 0.8→0.12：连同�
 // 这是「日间天光路径」(与夜间走廊漏光 winSpot/corrLeak 互补，后者只在室内暗时点亮)。
 // 仅影响 MeshStandard/MeshPhysical 材质；不投阴影。强度由 sync() 按 mInt(窗光强度)+窗帘 实时驱动。
 const RECT_MAX = 6.0; // 面光源满强度(noon、窗帘全开时)；Task6 物理灯+提亮 4.0→6.0 让窗光更通透；过曝则下调
+// 走廊光透高窗的面光源满强度：远低于日光(RECT_MAX=6)。高窗开向内走廊，进来的是暗淡走廊灯，
+// 不是正午天光。之前误用 RECT_MAX 驱动走廊 rWin → 面光源(y2.79,z3.0)把正下方同墙的班级板报
+// (高反照米黄, y1.55,z3.1)烤成一块过曝死白，而全屋其余仍黑 → "白色区域光影不自然"(用户报告)。
+// 1.5：柔和走廊余光洒在窗下墙/板报上，不过曝。想更亮/更暗改此值即可。
+const RECT_CORR = 1.5;
 const rWin = new THREE.RectAreaLight(0xdfe8f5 /*偏冷天光; Task6 随 preset 调*/, 0.0, RWIN_W, WIN_YT - WIN_YB);
 rWin.position.set(RW/2 - 0.05, (WIN_YB + WIN_YT)/2, WIN_CZ); // 窗洞内侧
 rWin.lookAt(RW/2 - 2.0, (WIN_YB + WIN_YT)/2, WIN_CZ);        // 法线指向室内 -x
@@ -6614,7 +6619,7 @@ const winLightTex = makeWindowLightTex();
 // Track all window patches for dynamic angle update
 const winPatches=[];
 const winShafts=[];
-const ceilPatches=[]; // 阳光反弹到窗侧天花板的柔和亮斑（低太阳更明显）
+const ceilPatches=[]; // 已废弃：窗侧吊顶反弹贴片(3块假发光方块)已移除，改由 ceilBounce SpotLight 提供真实渐变；保留空数组仅为下游 forEach 兼容
 
 winPositions.forEach((wz,wi)=>{
   const worldZ=-RD/2+6+RD/2+wz;
@@ -6651,17 +6656,11 @@ winPositions.forEach((wz,wi)=>{
   //   "光线射入"的氛围改由尘埃粒子(丁达尔)+窗口地面光斑承担。winShafts 保持空数组，
   //   下游所有 winShafts.forEach 自动变为空操作，无需改动。）
 
-  // Ceiling reflection patch — 阳光经地面/窗台反弹，在窗侧天花板形成柔和亮斑（面朝下）
-  const ceilPatchMat=new THREE.MeshBasicMaterial({
-    map:winLightTex, transparent:true, opacity:0.0, depthWrite:false
-  });
-  const ceilPatch=new THREE.Mesh(new THREE.PlaneGeometry(2.6,3.4),ceilPatchMat);
-  ceilPatch.rotation.x=Math.PI/2;           // 面朝下，对着室内
-  ceilPatch.position.set(-RW/2+2.6, RH-0.07, worldZ); // 紧贴吊顶下方、靠窗侧
-  ceilPatch.userData.baseZ=worldZ;
-  ceilPatch.userData.winIdx=wi;
-  scene.add(ceilPatch);
-  ceilPatches.push(ceilPatch);
+  // Ceiling reflection patch 已移除：这是每扇窗一块 MeshBasicMaterial 贴片(共 3 块)，
+  // 贴在窗侧吊顶下方、都用同一张 winLightTex、opacity/scale 对所有窗完全一致(只有微小位移差)，
+  // 在暗场景里读成"三块一模一样、悬在天花板上的发光方块"(用户反馈)——与已删除的地面光斑/进光高光带
+  // 属同一类假贴片伪影。真实的窗侧吊顶反弹亮度已由 ceilBounce(3 盏 SpotLight)提供近窗亮/远侧暗的
+  // 自然渐变，这三块贴片纯属冗余，直接删除。
 });
 
 // ── 体积阳光光束（柱状广告牌 god-ray）──────────────────────────────────────────
@@ -6783,15 +6782,9 @@ function updateWindowPatches(angleDeg, sunElev){
     s.material.opacity = Math.max(0, 0.46 * lowSun * visibilityScale) * hardMul;
   });
 
-  // 天花板反弹亮斑：阳光打到地面/窗台后反弹上来，靠窗侧最亮，低太阳时最明显。
-  ceilPatches.forEach((cp, i)=>{
-    const variation = (i - 1) * 0.12;
-    cp.position.x = -RW/2 + 2.2 + reach * 0.22 + variation * 0.4;
-    cp.position.z = cp.userData.baseZ + zShift * 0.5 + variation;
-    cp.rotation.z = tilt * 0.3 + variation * 0.05;
-    cp.scale.set(1.0 + (1-sunHeight)*0.4, 1.0 + (1-sunHeight)*0.6, 1);
-    cp.material.opacity = Math.max(0, 0.13 * lowSun * visibilityScale);
-  });
+  // 天花板反弹亮斑贴片已移除(见上方创建处注释)：改由 ceilBounce SpotLight 提供真实反弹渐变。
+  // ceilPatches 为空数组，此 forEach 自动成为空操作。
+  ceilPatches.forEach(()=>{});
 }
 
 // Light entering — 窗侧"进光高光带"已移除：
@@ -7651,13 +7644,12 @@ function sync(){
   // 主光：透过半透帘布后变暗变柔（拉得越满越暗、阴影越软）
   mainLight.intensity = mi * (1 - 0.72 * cAmt);   // 透帘后主光大幅衰减
   mainLight.shadow.radius = 3 + 11 * cAmt;   // base 5→3: firmer contact band when curtains open; still softens to 14 when fully drawn
-  // 日间天光面光源：晨/午最亮、夜间(mi→0)≈0；随拉帘衰减(沿用 cDim 模式)；并取窗光色温。
-  // daylightFactor = 当前窗光强度 mi / 正午参考值 2.6(PRESETS.noon.mInt 为最强日光)。
-  const daylightFactor = Math.min(1, mi / 2.6);
-  if (typeof rWin !== 'undefined') {
-    rWin.intensity = RECT_MAX * daylightFactor * cDim;
-    rWin.color.copy(mainLight.color);
-  }
+  // 右墙高窗开向内走廊(x>RW/2 是走廊，非室外)：透窗的面光源 rWin 代表"走廊光漫入教室"，
+  // 应由走廊灯(corrCtl)控制、与太阳(mi)无关(用户报告：关走廊灯后右上仍有一块发光，是太阳在驱动它)。
+  // 驱动移到 render loop 的走廊块，跟随 corrCtl.cur 平滑电平；此处不再按日光设置 rWin。
+  // 强度用 RECT_CORR(≈1.5, 柔和走廊余光)而非 RECT_MAX(=6, 日光)：高窗对着走廊、进来的是暗淡走廊灯，
+  // 日光级强度会把窗下班级板报烤成过曝白块。故白天右窗贡献比旧版低(物理上更对：右窗非采光面)。
+  // 关走廊灯 → rWin=0，右上发光块随之消失。
   document.getElementById('mIntv').textContent=mi.toFixed(2);
   document.getElementById('mTempv').textContent=tempLabel(mt);
   document.getElementById('mAnglev').textContent=angle+'°';
@@ -8259,7 +8251,11 @@ if(driftOn){
     // (白昼原为 0.35，现 0.30 更低→更不会透窗成大白块；日间窗光仍由 rWin/日光主导，见 noon 实测 board≈197 不变暗。)
     const corrVis = 0.30;
     corrGlowMats.forEach(g => {
-      g.m.emissiveIntensity = (g.baseEmis + (g.emisMax - g.baseEmis) * lvl01) * corrVis;
+      // 走廊自发光整体随开关电平(lvl01)缩放：关走廊灯(lvl01→0)时 emissive 归零，
+      // 透过高窗看走廊不再残留一圈辉光(用户报告"关走廊灯后窗户还发光")。
+      // 早前写成 baseEmis + (emisMax-baseEmis)*lvl01：lvl01=0 仍留 baseEmis*corrVis 的"关不掉的地板亮度"，
+      // 在纯黑夜景里就成了透窗的绿灰辉光。满亮(lvl01=1)时两式相等(baseEmis 抵消)，故峰值观感不变。
+      g.m.emissiveIntensity = g.emisMax * lvl01 * corrVis;
     });
     // 「光投进教室」的部分（窗内聚光 + 地面/墙面光斑 + 玻璃辉光）只有在室内暗时才显著
     const spill = lvl * spillGate;
@@ -8267,6 +8263,13 @@ if(driftOn){
     corrLeak.spot.light.intensity        = corrLeak.spot.max  * spill;
     corrLeak.floor.mat.opacity           = corrLeak.floor.max * spill;
     corrLeak.wall.mat.opacity            = corrLeak.wall.max  * spill;
+    // 右墙高窗面光源(rWin)：由走廊灯电平驱动(而非太阳)——高窗开向走廊，透进来的是走廊光。
+    // 关走廊灯(lvl01→0) → rWin=0，右上"关不掉的发光块"消失；峰值为 RECT_CORR(走廊满亮时，柔和不过曝)。
+    // 冷白走廊光色(0xdfe8f5)，不再取暖阳色。
+    if (typeof rWin !== 'undefined') {
+      rWin.intensity = RECT_CORR * lvl01 * curtainDim;   // 走廊光柔和余量(非日光 RECT_MAX)，防止烤白窗下班级板报
+      rWin.color.setHex(0xdfe8f5);
+    }
   }
 
   // ── Dappled light animation — breeze effect ───────────────────────────────
@@ -8430,7 +8433,8 @@ document.addEventListener('keydown', e=>{
   const ctlVal=id=>{ const e=document.getElementById(id); return e ? (e.type==='checkbox' ? (e.checked?'1':'0') : e.value) : ''; };
   function lightHash(){                            // 实时灯光状态（滑块值），让报告能精确复现，而非只靠 preset 默认值
     return `&mInt=${ctlVal('mInt')}&mTemp=${ctlVal('mTemp')}&mAngle=${ctlVal('mAngle')}`+
-           `&ceilOn=${ctlVal('ceilOn')}&ceilInt=${ctlVal('ceilInt')}&ceilTemp=${ctlVal('ceilTemp')}&curtainOn=${ctlVal('curtainOn')}`;
+           `&ceilOn=${ctlVal('ceilOn')}&ceilInt=${ctlVal('ceilInt')}&ceilTemp=${ctlVal('ceilTemp')}&curtainOn=${ctlVal('curtainOn')}`+
+           `&corrOn=${ctlVal('corrOn')}&corrInt=${ctlVal('corrInt')}`;
   }
   function buildHash(){                           // 把机位+预设+灯光状态打包成可复现 URL hash
     const v=window.DBG.view();
@@ -8477,7 +8481,7 @@ document.addEventListener('keydown', e=>{
 - 时间预设: ${activePreset()}
 - 命中物体: ${objLine}
 - 命中点: ${hitLine}
-- 灯光状态: 太阳强度mInt=${ctlVal('mInt')} 色温=${ctlVal('mTemp')} 角度=${ctlVal('mAngle')} | 吊顶灯=${ctlVal('ceilOn')==='1'?'开':'关'} 亮度=${ctlVal('ceilInt')}
+- 灯光状态: 太阳强度mInt=${ctlVal('mInt')} 色温=${ctlVal('mTemp')} 角度=${ctlVal('mAngle')} | 吊顶灯=${ctlVal('ceilOn')==='1'?'开':'关'} 亮度=${ctlVal('ceilInt')} | 走廊灯=${ctlVal('corrOn')==='1'?'开':'关'} 亮度=${ctlVal('corrInt')}
 - 截图: ${fname}(问题点已红圈标出)
 
 ### 症状(填一句)
@@ -8527,12 +8531,13 @@ document.addEventListener('keydown', e=>{
     const num=k=>hp.has(k)?parseFloat(hp.get(k)):undefined;
     if(hp.has('preset')) applyPreset(hp.get('preset'));
     // 应用报告携带的实时灯光状态（覆盖 preset 默认值），让复现链接精确还原当时的亮度
-    const ovl=['mInt','mTemp','mAngle','ceilInt','ceilTemp','ceilOn','curtainOn'];
+    const ovl=['mInt','mTemp','mAngle','ceilInt','ceilTemp','ceilOn','curtainOn','corrOn','corrInt'];
     if(ovl.some(k=>hp.has(k))){
       const setC=(id,cb)=>{ if(hp.has(id)){ const el=document.getElementById(id); if(el){ if(cb) el.checked=hp.get(id)==='1'; else el.value=hp.get(id); } } };
-      ['mInt','mTemp','mAngle','ceilInt','ceilTemp'].forEach(id=>setC(id,false));
-      ['ceilOn','curtainOn'].forEach(id=>setC(id,true));
+      ['mInt','mTemp','mAngle','ceilInt','ceilTemp','corrInt'].forEach(id=>setC(id,false));
+      ['ceilOn','curtainOn','corrOn'].forEach(id=>setC(id,true));
       try{ syncCeiling(); }catch(e){}
+      try{ syncCorridor(); }catch(e){}
       try{ sync(); }catch(e){}
     }
     setView({theta:num('theta'),phi:num('phi'),camR:num('camR'),panX:num('panX'),panZ:num('panZ'),panY:num('panY')});

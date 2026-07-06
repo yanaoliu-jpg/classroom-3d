@@ -4924,50 +4924,50 @@ ceil.receiveShadow=true;
 ceil.castShadow=true; ceil.material.shadowSide=THREE.DoubleSide;
 scene.add(ceil);
 
-// ── 吊顶格栅（铺满整个房间，无黑缝）──────────────────────────────────────────────
+// ── 吊顶格栅（铺满整个房间，无黑缝）——InstancedMesh 合批（提帧③：~166 draw call → 3，画面逐像素不变）
 {
-  const gridMat = mat(0xe2e0dc, 0.88);
   const beamMat = mat(0xd4d0ca, 0.85);
   const ceilY   = RH - 0.001;
   const ceilZ0  = 6;                  // 天花板/房间中心 Z（与墙体一致）
   const beamT   = 0.06;               // 龙骨厚度
   const beamH   = 0.055;             // 龙骨下探高度
+  const _d = new THREE.Object3D();
 
-  // 纵向龙骨（沿 Z 方向）——铺满 x∈[-7,7]
   const xBeams = [];
-  for(let x=-7; x<=7.001; x+=1.4) xBeams.push(+x.toFixed(3));
-  xBeams.forEach(bx => {
-    const b = new THREE.Mesh(new THREE.BoxGeometry(beamT, beamH, RD), beamMat);
-    b.position.set(bx, ceilY - beamH/2, ceilZ0);
-    b.receiveShadow = true; scene.add(b);
-  });
-
-  // 横向龙骨（沿 X 方向）——铺满房间纵深 z∈[-5,14.5]（覆盖可用区 [-5,13.5]）
+  for(let x=-7; x<=7.001; x+=1.4) xBeams.push(+x.toFixed(3));           // 纵向龙骨 x∈[-7,7]
   const zBeams = [];
-  for(let z=-11; z<=10.1; z+=1.5) zBeams.push(ceilZ0 + z);   // 上限 8.6→10.1：格栅延伸到后墙(z=16)一带，随后墙后移补满
-  zBeams.forEach(bz => {
-    const b = new THREE.Mesh(new THREE.BoxGeometry(RW, beamH, beamT), beamMat);
-    b.position.set(0, ceilY - beamH/2, bz);
-    b.receiveShadow = true; scene.add(b);
-  });
+  for(let z=-11; z<=10.1; z+=1.5) zBeams.push(ceilZ0 + z);              // 横向龙骨 z∈[-5,16]
 
-  // 格栅板填充（每格一块矿棉板，颜色微差）
-  xBeams.forEach((bx, xi) => {
-    if(xi === xBeams.length-1) return;
-    const gw = xBeams[xi+1] - bx - beamT;
-    zBeams.forEach((bz, zi) => {
-      if(zi === zBeams.length-1) return;
-      const gd = zBeams[zi+1] - bz - beamT;
-      const v = 0.80 + (Math.sin(xi*3.1+zi*2.7)*0.5+0.5)*0.04; // 0.91→0.80：吊顶矿棉板反照率下调，强光下保留板缝纹理、不再整片死白
-      const tile = new THREE.Mesh(
-        new THREE.PlaneGeometry(gw, gd),
-        mat(new THREE.Color(v*0.96, v*0.95, v*0.93).getHex(), 0.92)
-      );
-      tile.rotation.x = Math.PI/2;
-      tile.position.set(bx + beamT/2 + gw/2, ceilY - beamH - 0.001, bz + beamT/2 + gd/2);
-      tile.receiveShadow = true; scene.add(tile);
-    });
-  });
+  // 纵向龙骨（沿 Z）→ 1 个 InstancedMesh
+  const xBeamMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(beamT, beamH, RD), beamMat, xBeams.length);
+  xBeamMesh.receiveShadow = true;
+  xBeams.forEach((bx,i)=>{ _d.position.set(bx, ceilY-beamH/2, ceilZ0); _d.rotation.set(0,0,0); _d.updateMatrix(); xBeamMesh.setMatrixAt(i,_d.matrix); });
+  xBeamMesh.instanceMatrix.needsUpdate = true; scene.add(xBeamMesh);
+
+  // 横向龙骨（沿 X）→ 1 个 InstancedMesh
+  const zBeamMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(RW, beamH, beamT), beamMat, zBeams.length);
+  zBeamMesh.receiveShadow = true;
+  zBeams.forEach((bz,i)=>{ _d.position.set(0, ceilY-beamH/2, bz); _d.rotation.set(0,0,0); _d.updateMatrix(); zBeamMesh.setMatrixAt(i,_d.matrix); });
+  zBeamMesh.instanceMatrix.needsUpdate = true; scene.add(zBeamMesh);
+
+  // 格栅板（每格一块矿棉板；尺寸恒定 → 1 个 InstancedMesh + 逐实例色保留微差）
+  const gw = xBeams[1]-xBeams[0]-beamT, gd = zBeams[1]-zBeams[0]-beamT;
+  const nTiles = (xBeams.length-1)*(zBeams.length-1);
+  const tileMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(gw, gd), mat(0xffffff, 0.92), nTiles);
+  tileMesh.receiveShadow = true;
+  const _c = new THREE.Color(); let ti=0;
+  for(let xi=0; xi<xBeams.length-1; xi++){
+    for(let zi=0; zi<zBeams.length-1; zi++){
+      const v = 0.80 + (Math.sin(xi*3.1+zi*2.7)*0.5+0.5)*0.04;
+      _d.position.set(xBeams[xi]+beamT/2+gw/2, ceilY-beamH-0.001, zBeams[zi]+beamT/2+gd/2);
+      _d.rotation.set(Math.PI/2,0,0); _d.updateMatrix(); tileMesh.setMatrixAt(ti, _d.matrix);
+      _c.setRGB(v*0.96, v*0.95, v*0.93, THREE.LinearSRGBColorSpace); tileMesh.setColorAt(ti, _c); // 与原逐块 mat() 同为线性 rgb
+      ti++;
+    }
+  }
+  tileMesh.instanceMatrix.needsUpdate = true;
+  if(tileMesh.instanceColor) tileMesh.instanceColor.needsUpdate = true;
+  scene.add(tileMesh);
 }
 
 // Back wall (where blackboard is)
@@ -7332,8 +7332,21 @@ const officeGroup = new THREE.Group(); scene.add(officeGroup); // 提帧⑤：�
   // 前墙(z=Z0,面向+z入室)
   wallSeal(Object.assign(new THREE.Mesh(new THREE.PlaneGeometry(OW,OH),wMat),{}))
     .position.set(OCX,OH/2,Z0);
-  // 左墙(x=X0)
-  { const m=new THREE.Mesh(new THREE.PlaneGeometry(OD,OH),wMat); m.rotation.y=Math.PI/2; m.position.set(X0,OH/2,OCZ); wallSeal(m); }
+  // 西墙(x=X0)：教室同朝向的清窗 ×2（ShapeGeometry 挖两洞，开向 -x 室外 → 接同一侧太阳）
+  const WW=2.2, WH=2.4, WB=0.6, WT=WB+WH;   // 窗宽(沿z)/高/下沿/上沿
+  const winCZ=[20.1, 22.9];                   // 两窗中心 z（中间留墙垛）
+  {
+    const shape=new THREE.Shape();
+    shape.moveTo(Z0,0); shape.lineTo(Z1,0); shape.lineTo(Z1,OH); shape.lineTo(Z0,OH); shape.lineTo(Z0,0);
+    winCZ.forEach(cz=>{
+      const h=new THREE.Path();
+      h.moveTo(cz-WW/2,WB); h.lineTo(cz+WW/2,WB); h.lineTo(cz+WW/2,WT); h.lineTo(cz-WW/2,WT); h.lineTo(cz-WW/2,WB);
+      shape.holes.push(h);
+    });
+    const m=new THREE.Mesh(new THREE.ShapeGeometry(shape), wMat);
+    m.rotation.y=-Math.PI/2; m.position.set(X0,0,0);   // 与教室左墙同款变换：世界 z=顶点值、x=X0
+    m.receiveShadow=true; m.castShadow=true; scene.add(m);
+  }
   // 东墙(x=X1)：开门洞（ShapeGeometry 挖洞）+ 门框 + 门扇 → 经走廊延伸段连通
   {
     const dHW=0.6, dTop=2.1;
@@ -7363,44 +7376,25 @@ const officeGroup = new THREE.Group(); scene.add(officeGroup); // 提帧⑤：�
   const dadoMat=mat(0xe7ddc6,0.9), skirtMat=mat(0xa79d8d,0.65);
   [dadoMat,skirtMat].forEach(mm=>mm.side=THREE.DoubleSide);
   function band(w,h,yc,x,z,ry,mm){ const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),mm); m.position.set(x,yc,z); m.rotation.y=ry; m.receiveShadow=true; scene.add(m); }
-  // 只做前墙/左墙的护墙裙（东墙有门洞→跳过，避免踢脚线横穿门口）
-  [[Z0,0],[X0,Math.PI/2]].forEach(([p,ry],i)=>{
-    const len = i===0?OW:OD;
-    const wx = i===0?OCX:(p + (ry>0?0.012:-0.012)), wz=i===0?(Z0+0.012):OCZ;
-    band(len,1.0,0.56, wx,wz, ry, dadoMat);
-    band(len,0.12,0.06, wx,wz, ry, skirtMat);
+  // 护墙裙只做前/远两面实墙（西墙有窗、东墙有门 → 跳过，避免踢脚线横穿窗/门）
+  [[Z0+0.012, 0],[Z1-0.012, Math.PI]].forEach(([z,ry])=>{
+    band(OW,1.0,0.56, OCX,z, ry, dadoMat);
+    band(OW,0.12,0.06, OCX,z, ry, skirtMat);
   });
 
-  // ── 远端窗墙(z=Z1)：教室同款白框清窗 ×2（ShapeGeometry 挖两洞）──────────────
-  const WW=2.4, WH=2.4, WB=0.6, WT=WB+WH;   // 窗宽/高/下沿/上沿
-  const winCX=[-1.6, 1.6];                   // 两窗中心 x（中间留 0.8 墙垛）
-  {
-    const shape=new THREE.Shape();
-    shape.moveTo(X0,0); shape.lineTo(X1,0); shape.lineTo(X1,OH); shape.lineTo(X0,OH); shape.lineTo(X0,0);
-    winCX.forEach(cx=>{
-      const h=new THREE.Path();
-      h.moveTo(cx-WW/2,WB); h.lineTo(cx+WW/2,WB); h.lineTo(cx+WW/2,WT); h.lineTo(cx-WW/2,WT); h.lineTo(cx-WW/2,WB);
-      shape.holes.push(h);
-    });
-    const geo=new THREE.ShapeGeometry(shape);
-    const m=new THREE.Mesh(geo, wMat);
-    m.rotation.y=Math.PI; m.position.set(0,0,Z1);   // 面向 -z（入室）
-    m.receiveShadow=true; m.castShadow=true; scene.add(m);
-  }
-  // 白框 + 窗台（每扇窗）
+  // ── 远端墙(z=Z1)：实墙（窗户已挪到西墙，与教室同朝向）──────────────
+  { const m=new THREE.Mesh(new THREE.PlaneGeometry(OW,OH),wMat); m.rotation.y=Math.PI; m.position.set(OCX,OH/2,Z1); wallSeal(m); }
+  // 白框 + 窗台（每扇西墙窗；框在 z-y 平面，贴 x=X0 内侧）
   const fMat=mat(0xf0eeea,0.65), fw=0.06;
   const sillMat=mat(0xe8e4dc,0.8);
-  winCX.forEach(cx=>{
-    // 外框四边（贴 z=Z1 内侧）
-    const zf=Z1-0.03;
-    add(new THREE.BoxGeometry(fw,WH+fw*2,fw), fMat, cx-WW/2, WB+WH/2, zf);
-    add(new THREE.BoxGeometry(fw,WH+fw*2,fw), fMat, cx+WW/2, WB+WH/2, zf);
-    add(new THREE.BoxGeometry(WW+fw*2,fw,fw), fMat, cx, WT, zf);
-    add(new THREE.BoxGeometry(WW+fw*2,fw,fw), fMat, cx, WB, zf);
-    // 竖中梃（把每扇分两格，像参考图）
-    add(new THREE.BoxGeometry(fw*0.7,WH,fw), fMat, cx, WB+WH/2, zf);
-    // 窗台
-    add(new THREE.BoxGeometry(WW+0.14,0.05,0.16), sillMat, cx, WB-0.02, Z1-0.09);
+  const xf=X0+0.03;
+  winCZ.forEach(cz=>{
+    add(new THREE.BoxGeometry(fw,WH+fw*2,fw), fMat, xf, WB+WH/2, cz-WW/2);   // 竖框(前)
+    add(new THREE.BoxGeometry(fw,WH+fw*2,fw), fMat, xf, WB+WH/2, cz+WW/2);   // 竖框(后)
+    add(new THREE.BoxGeometry(fw,fw,WW+fw*2), fMat, xf, WT, cz);             // 上横框
+    add(new THREE.BoxGeometry(fw,fw,WW+fw*2), fMat, xf, WB, cz);             // 下横框
+    add(new THREE.BoxGeometry(fw,WH,fw*0.7), fMat, xf, WB+WH/2, cz);         // 竖中梃
+    add(new THREE.BoxGeometry(0.16,0.05,WW+0.14), sillMat, X0+0.09, WB-0.02, cz); // 窗台
   });
   // 窗外亮背板（天空 + 远处住宅楼剪影），让清窗透出白天光
   function extTex(){
@@ -7424,8 +7418,8 @@ const officeGroup = new THREE.Group(); scene.add(officeGroup); // 提帧⑤：�
     }
     const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; return t;
   }
-  { const m=new THREE.Mesh(new THREE.PlaneGeometry(OW+1.2,OH+0.6), new THREE.MeshBasicMaterial({map:extTex()}));
-    m.rotation.y=Math.PI; m.position.set(0,OH/2,Z1+0.6); scene.add(m); }
+  { const m=new THREE.Mesh(new THREE.PlaneGeometry(OD+1.2,OH+0.6), new THREE.MeshBasicMaterial({map:extTex()}));
+    m.rotation.y=Math.PI/2; m.position.set(X0-0.6,OH/2,OCZ); scene.add(m); }   // 西墙外亮背板，朝 +x（透窗可见）
 
   // ── 吊顶（实顶 castShadow + 格栅 + 2 灯板）────────────────────────────────────
   const ceilO=new THREE.Mesh(new THREE.PlaneGeometry(OW,OD), mat(0xeeece6,0.95));
@@ -7442,10 +7436,7 @@ const officeGroup = new THREE.Group(); scene.add(officeGroup); // 提帧⑤：�
     officePanels.push(pmat);
     if(i===0||i===3){ const pl=new THREE.PointLight(0xf5f3ee, 3.4, 8, 2); pl.position.set(lx,OH-0.3,lz); pl.castShadow=false; scene.add(pl); officeLights.push({light:pl,base:3.4}); } // 4→2 盏点光（对角覆盖），减灯提帧
   });
-  // 窗侧暖阳 SpotLight（斜射木地板，制造参考图那种暖光斜带；不投影，仅照明）
-  { const sp=new THREE.SpotLight(0xffd7a0, 26, 14, Math.PI/5, 0.55, 2);
-    sp.position.set(0, 3.2, Z1-0.3); sp.target.position.set(-0.5,0,20.2);
-    sp.castShadow=false; scene.add(sp); scene.add(sp.target); officeLights.push({light:sp,base:26}); }
+  // （原窗侧假 SpotLight 已移除：西墙清窗后由真实太阳从 -x 射入，产生随时段移动的真实窗光斑，与教室一致）
 
   // ══ 工位隔断 + 办公椅 ══════════════════════════════════════════════════════
   const deskTopMat=mat(0xeceae2,0.5), pedMat=mat(0xcbb083,0.6);

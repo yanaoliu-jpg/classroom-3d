@@ -8380,22 +8380,6 @@ window.addEventListener('resize',()=>{
 
 });
 
-// ── 转动时动态降分辨率 + 停用 GTAO ────────────────────────────────────────────────
-// 全屏转动掉帧的根因是「片元开销随像素数暴涨」(~30 灯/像素 + GTAO)。转相机的瞬间把内部渲染
-// 分辨率降下来(像素数≈1/6)并停掉 GTAO → 转动跟手不卡；停动 ~0.16s 自动切回满分辨率+GTAO →
-// 静止观看逐像素清晰、光影不变。人眼在高速旋转时看不出这点临时降采样。
-let _hiRes = true, _lastMotion = -10;
-const _MOTION_HOLD = 0.16;                 // 停动多少秒后恢复满分辨率
-const _LOW_PR = 0.7;                        // 转动时内部像素比（越低越快越糊；0.6~0.9 可调）
-const _prevCamPos = new THREE.Vector3(NaN,NaN,NaN);
-const _prevCamQuat = new THREE.Quaternion(0,0,0,NaN);
-function setRenderScale(low){
-  const pr = low ? _LOW_PR : pixelRatioCap();
-  renderer.setPixelRatio(pr);
-  composer.setPixelRatio(pr);
-  gtaoPass.enabled = !low;                  // 转动时停用 GTAO
-}
-
 // ── Film Grain ────────────────────────────────────────────────────────────────
 // Direct RGBA pixel approach — no blend modes, works everywhere.
 // The grain canvas is a full-resolution 2D overlay drawn every frame.
@@ -8823,14 +8807,6 @@ if(driftOn){
   // 可见性切换时刷新一次阴影：进办公室要让办公室四壁重新进阴影贴图挡住太阳(否则残留旧图会漏光)。
   { const offVis = camera.position.z > 13;
     if(offVis !== officeGroup.visible){ officeGroup.visible = offVis; renderer.shadowMap.needsUpdate = true; } }
-
-  // 相机变换有变化即视为「在动」→ 降分辨率+停 GTAO；停动 _MOTION_HOLD 秒后恢复满质量
-  if(!_prevCamPos.equals(camera.position) || !_prevCamQuat.equals(camera.quaternion)){
-    _lastMotion = t; _prevCamPos.copy(camera.position); _prevCamQuat.copy(camera.quaternion);
-  }
-  const _wantLow = (t - _lastMotion) < _MOTION_HOLD;
-  if(_wantLow && _hiRes){ setRenderScale(true); _hiRes=false; }
-  else if(!_wantLow && !_hiRes){ setRenderScale(false); _hiRes=true; }
 
   composer.render();
   drawBloom(); // 亮部辉光叠层（每帧，避免相机移动时拖影）

@@ -7396,30 +7396,7 @@ const officeGroup = new THREE.Group(); scene.add(officeGroup); // 提帧⑤：�
     add(new THREE.BoxGeometry(fw,WH,fw*0.7), fMat, xf, WB+WH/2, cz);         // 竖中梃
     add(new THREE.BoxGeometry(0.16,0.05,WW+0.14), sillMat, X0+0.09, WB-0.02, cz); // 窗台
   });
-  // 窗外亮背板（天空 + 远处住宅楼剪影），让清窗透出白天光
-  function extTex(){
-    const W=1024,H=512,cv=document.createElement('canvas'); cv.width=W;cv.height=H;
-    const ctx=cv.getContext('2d');
-    const sky=ctx.createLinearGradient(0,0,0,H);
-    sky.addColorStop(0,'#bcd3ea'); sky.addColorStop(0.6,'#e6eef6'); sky.addColorStop(1,'#f6f1e6');
-    ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
-    // 远处住宅楼群（暖光立面 + 窗格）
-    for(let b=0;b<7;b++){
-      const bw=90+Math.random()*70, bx=b*150-20, bh=180+Math.random()*180, by=H-bh;
-      const shade=200-b*6;
-      ctx.fillStyle=`rgb(${shade},${shade-18},${shade-40})`;
-      ctx.fillRect(bx,by,bw,bh);
-      // 窗格
-      for(let wy=by+14; wy<H-16; wy+=22)
-        for(let wx2=bx+10; wx2<bx+bw-10; wx2+=20){
-          ctx.fillStyle=Math.random()<0.5?'rgba(120,140,160,0.6)':'rgba(255,236,190,0.7)';
-          ctx.fillRect(wx2,wy,11,13);
-        }
-    }
-    const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; return t;
-  }
-  { const m=new THREE.Mesh(new THREE.PlaneGeometry(OD+1.2,OH+0.6), new THREE.MeshBasicMaterial({map:extTex()}));
-    m.rotation.y=Math.PI/2; m.position.set(X0-0.6,OH/2,OCZ); scene.add(m); }   // 西墙外亮背板，朝 +x（透窗可见）
+  // 窗外背板已去掉：西墙清窗为真开口（与空教室一致），透窗直接见场景背景、太阳完全投入，不再是贴图面板
 
   // ── 吊顶（实顶 castShadow + 格栅 + 2 灯板）────────────────────────────────────
   const ceilO=new THREE.Mesh(new THREE.PlaneGeometry(OW,OD), mat(0xeeece6,0.95));
@@ -7490,13 +7467,15 @@ const officeGroup = new THREE.Group(); scene.add(officeGroup); // 提帧⑤：�
   }
 
   // 两个 pod（左/右），各 2×2 背靠背，中间中脊；中间留过道通往窗户
-  const pods=[[-2.0,20.9],[2.0,20.9]];
-  pods.forEach(([px,pz],pi)=>{
-    workstation(px-0.7, pz-1.1, 0,        pi===0?meshBlue:meshBlack,  1);
-    workstation(px+0.7, pz-1.1, 0,        pi===0?meshBlack:meshBlue, -1);
-    workstation(px-0.7, pz+1.1, Math.PI,  pi===0?meshBlack:meshBlue,  1);
-    workstation(px+0.7, pz+1.1, Math.PI,  pi===0?meshBlue:meshBlack, -1);
-  });
+  // 全体朝 -x（挡板/隔断朝向西窗）：2 列(x) × 4 行(z)，占用者面向窗户
+  const colXo=[-2.4, 0.2];                    // 列1贴窗、列2居中
+  const rowZo=[19.5, 20.9, 22.3, 23.7];       // 4 行（pitch 1.4）
+  let wsi=0;
+  colXo.forEach((cx,ci)=> rowZo.forEach((cz,ri)=>{
+    if(ri===1) return;   // 去掉两列的第2行(z≈20.9)两个工位 → 与门(z≈20.2)对齐的东西向过道
+    workstation(cx, cz, -Math.PI/2, (wsi%2 ? meshBlue : meshBlack), ci===0?1:-1);
+    wsi++;
+  }));
 })();
 
 // ══ 连廊：把走廊(x∈[7,8.9])向西接到办公室东墙门(x=4)，形成 L 形通道 ═══════════════════
@@ -7644,6 +7623,24 @@ function seededRand(seed){
   return x-Math.floor(x);
 }
 
+// ── 桌椅结构件合批（提帧）：25 套 × ~30 共享(geo,mat)件 → 每(geo,mat)一个 InstancedMesh。
+// recDirect/recInGroup 只记录「世界矩阵」，循环结束统一建 InstancedMesh；几何/材质/位置/投影标志
+// 全部照旧 → 画面与光影逐像素不变。书本/书包/文具等「每桌唯一材质」的件仍用普通 mesh（不入桶）。
+const _IB = [];                       // [{geo,mat,cast,recv,mats:[Matrix4]}]
+const _grpD = new THREE.Group(), _chD = new THREE.Object3D(); _grpD.add(_chD);
+const _dirD = new THREE.Object3D();
+function _bucket(geo,mat,cast,recv){ let b=_IB.find(e=>e.geo===geo&&e.mat===mat); if(!b){b={geo,mat,cast,recv,mats:[]};_IB.push(b);} return b; }
+function recDirect(geo,mat,cast,recv, x,y,z, rx=0,ry=0,rz=0){
+  _dirD.position.set(x,y,z); _dirD.rotation.set(rx,ry,rz); _dirD.updateMatrix();
+  _bucket(geo,mat,cast,recv).mats.push(_dirD.matrix.clone());
+}
+function recInGroup(geo,mat,cast,recv, gx,gy,gz,gry, px,py,pz, rx=0,ry=0,rz=0){
+  _grpD.position.set(gx,gy,gz); _grpD.rotation.set(0,gry,0);
+  _chD.position.set(px,py,pz); _chD.rotation.set(rx,ry,rz);
+  _grpD.updateMatrixWorld(true);
+  _bucket(geo,mat,cast,recv).mats.push(_chD.matrixWorld.clone());
+}
+
 for(let row=0;row<ROWS;row++){
   for(let col=0;col<COLS;col++){
     if(col===1||col===4||col===6) continue;   // 去掉第2/5/7列(1-based，colX 由左→右)的桌椅
@@ -7662,24 +7659,13 @@ for(let row=0;row<ROWS;row++){
     // 接触阴影：桌、椅各一张软暗斑
     addContactShadow(dx, dz, deskW*1.45, deskD*1.6, deskRot);
 
-    // Desk surface
-    const desk=new THREE.Mesh(deskGeo,deskMat);
-    desk.position.set(dx,0.76,dz);
-    desk.rotation.y=deskRot;
-    desk.castShadow=true;desk.receiveShadow=true;
-    scene.add(desk);
-
-    // 桌面后缘·笔槽凸唇（挡笔的凸起边条，作为桌面子物体随其旋转）
-    const groove=new THREE.Mesh(grooveGeo,deskMat);
-    groove.position.set(0, deskH/2+0.01, -deskD/2+0.03);
-    groove.castShadow=true; desk.add(groove);
+    // Desk surface（合批）
+    recDirect(deskGeo, deskMat, 1,1, dx,0.76,dz, 0,deskRot,0);
+    // 桌面后缘·笔槽凸唇（原为桌面子物体：世界=桌面变换×局部）
+    recInGroup(grooveGeo, deskMat, 1,0, dx,0.76,dz,deskRot, 0, deskH/2+0.01, -deskD/2+0.03);
 
     // ── 银色弯管钢架（撬脚式）：4 竖腿 + 底部纵撬脚 + 顶部横连杆 + 管脚套 ──────────────
-    const frame=new THREE.Group();
-    frame.position.set(dx,0,dz); frame.rotation.y=deskRot;
-    const mkTube=(geo,material,px,py,pz)=>{
-      const m=new THREE.Mesh(geo,material); m.position.set(px,py,pz); m.castShadow=true; frame.add(m);
-    };
+    const mkTube=(geo,material,px,py,pz)=>{ recInGroup(geo,material, 1,0, dx,0,dz,deskRot, px,py,pz); };
     const dLX=deskW/2-0.075, dLZ=deskD/2-0.06;
     [[dLX,dLZ],[-dLX,dLZ],[dLX,-dLZ],[-dLX,-dLZ]].forEach(([lx,lz])=>{
       mkTube(dLegTubeGeo, steelMat, lx, 0.39,  lz);   // 竖腿(底≈0.03→顶≈0.75)
@@ -7689,19 +7675,10 @@ for(let row=0;row<ROWS;row++){
     mkTube(dRunTubeGeo, steelMat,  dLX, 0.05, 0);     // 右·底纵撬脚
     mkTube(dCrsTubeGeo, steelMat, 0, 0.72,  dLZ);     // 前·横连杆
     mkTube(dCrsTubeGeo, steelMat, 0, 0.72, -dLZ);     // 后·横连杆
-    scene.add(frame);
 
     // ── 桌斗：桌面下方的开放储物格（开口朝椅子/学生侧 +Z，像私人小仓库）────────────
     // 用一个 Group 承载五块板，整体随桌面同角度(deskRot)旋转；+Z 面敞开、仅留一道矮挡条。
-    const dou=new THREE.Group();
-    dou.position.set(dx,0,dz);
-    dou.rotation.y=deskRot;
-    const mkDou=(geo,px,py,pz)=>{
-      const m=new THREE.Mesh(geo,douMat);
-      m.position.set(px,py,pz);
-      m.castShadow=true;m.receiveShadow=true;
-      dou.add(m);
-    };
+    const mkDou=(geo,px,py,pz)=>{ recInGroup(geo,douMat, 1,1, dx,0,dz,deskRot, px,py,pz); };
     mkDou(douBottomGeo, 0,              douBotY+0.007,    0);                // 底板
     mkDou(douBackGeo,   0,              douCenterY,      -douD/2+0.007);     // 后挡板(-Z，远离学生)
     mkDou(douSideGeo,  -douW/2+0.007,   douCenterY,       0);               // 左侧板
@@ -7709,11 +7686,8 @@ for(let row=0;row<ROWS;row++){
     mkDou(douFrontGeo,  0,              douCenterY,       douD/2-0.006);     // 正面板(+Z 学生侧，封口成书箱)
     // 透气横槽（3 道暗色内凹，模拟塑料书箱正面的透气孔）
     [douCenterY+0.035, douCenterY, douCenterY-0.035].forEach(vy=>{
-      const v=new THREE.Mesh(ventStripGeo,ventMat);
-      v.position.set(0, vy, douD/2-0.0002);
-      dou.add(v);
+      recInGroup(ventStripGeo, ventMat, 0,0, dx,0,dz,deskRot, 0, vy, douD/2-0.0002);
     });
-    scene.add(dou);
 
     // Chair — pushed back at varied angles, not always perfectly behind desk
     // Min pushback = desk rear edge + half seat depth + small gap (chair just tucked in)
@@ -7728,34 +7702,22 @@ for(let row=0;row<ROWS;row++){
     // 椅子接触阴影
     addContactShadow(cx, cz, 0.62, 0.62, chairRot);
 
-    // Seat
-    const seat=new THREE.Mesh(seatGeo,chairWoodMat);
-    seat.position.set(cx,0.46,cz);
-    seat.rotation.y=chairRot;
-    seat.castShadow=true;seat.receiveShadow=true;
-    scene.add(seat);
+    // Seat（合批）
+    recDirect(seatGeo, chairWoodMat, 1,1, cx,0.46,cz, 0,chairRot,0);
     // Back — offset rotated with chair so it stays correctly attached to the seat
     const backOffsetZ = +(seatDepth/2 - 0.02); // +Z = rear of seat, toward which student leans
-    const back=new THREE.Mesh(backGeo,chairWoodMat);
-    back.position.set(
-      cx + backOffsetZ * Math.sin(chairRot),
-      0.7,
-      cz + backOffsetZ * Math.cos(chairRot)
-    );
-    back.rotation.y=chairRot;back.rotation.x=-0.1;
-    back.castShadow=true;back.receiveShadow=true;scene.add(back);
-    // 椅·银色弯管架（撬脚式）：4 竖腿 + 底部纵撬脚 + 管脚套（随椅子旋转）
-    const cframe=new THREE.Group();
-    cframe.position.set(cx,0,cz); cframe.rotation.y=chairRot;
+    recDirect(backGeo, chairWoodMat, 1,1,
+      cx + backOffsetZ * Math.sin(chairRot), 0.7, cz + backOffsetZ * Math.cos(chairRot),
+      -0.1, chairRot, 0);
+    // 椅·银色弯管架（撬脚式）：4 竖腿 + 底部纵撬脚 + 管脚套（随椅子旋转）（合批）
     const cLX=0.215, cLZ=0.18;
     [[cLX,cLZ],[-cLX,cLZ],[cLX,-cLZ],[-cLX,-cLZ]].forEach(([lx,lz])=>{
-      const leg=new THREE.Mesh(cLegTubeGeo,steelMat); leg.position.set(lx,0.24,lz); leg.castShadow=true; cframe.add(leg);
-      const ft =new THREE.Mesh(cFootGeo,footMat);      ft.position.set(lx,0.016,lz); ft.castShadow=true; cframe.add(ft);
+      recInGroup(cLegTubeGeo, steelMat, 1,0, cx,0,cz,chairRot, lx,0.24,lz);
+      recInGroup(cFootGeo,     footMat,  1,0, cx,0,cz,chairRot, lx,0.016,lz);
     });
     [-cLX,cLX].forEach(lx=>{
-      const run=new THREE.Mesh(cRunTubeGeo,steelMat); run.position.set(lx,0.04,0); run.castShadow=true; cframe.add(run);
+      recInGroup(cRunTubeGeo, steelMat, 1,0, cx,0,cz,chairRot, lx,0.04,0);
     });
-    scene.add(cframe);
 
     // Books — varied positions, slight rotations, some stacked askew
     const numBooks=1+Math.floor(idx%3);
@@ -7873,6 +7835,19 @@ for(let row=0;row<ROWS;row++){
       scene.add(cs);
     });
   }
+}
+
+// 桌椅结构件合批落地：每个 (geo,mat) 桶 → 1 个 InstancedMesh（~750 draw call → ~15，画面/光影不变）
+{
+  const _m4 = new THREE.Matrix4();
+  _IB.forEach(b=>{
+    const im = new THREE.InstancedMesh(b.geo, b.mat, b.mats.length);
+    im.castShadow = !!b.cast; im.receiveShadow = !!b.recv;
+    im.frustumCulled = false;   // 实例散布全屋，几何包围球在原点会误剔除 → 关闭视锥剔除
+    b.mats.forEach((m,i)=> im.setMatrixAt(i, _m4.copy(m)));
+    im.instanceMatrix.needsUpdate = true;
+    scene.add(im);
+  });
 }
 
 // ── LIGHTS ────────────────────────────────────────────────────────────────────
@@ -8405,6 +8380,22 @@ window.addEventListener('resize',()=>{
 
 });
 
+// ── 转动时动态降分辨率 + 停用 GTAO ────────────────────────────────────────────────
+// 全屏转动掉帧的根因是「片元开销随像素数暴涨」(~30 灯/像素 + GTAO)。转相机的瞬间把内部渲染
+// 分辨率降下来(像素数≈1/6)并停掉 GTAO → 转动跟手不卡；停动 ~0.16s 自动切回满分辨率+GTAO →
+// 静止观看逐像素清晰、光影不变。人眼在高速旋转时看不出这点临时降采样。
+let _hiRes = true, _lastMotion = -10;
+const _MOTION_HOLD = 0.16;                 // 停动多少秒后恢复满分辨率
+const _LOW_PR = 0.7;                        // 转动时内部像素比（越低越快越糊；0.6~0.9 可调）
+const _prevCamPos = new THREE.Vector3(NaN,NaN,NaN);
+const _prevCamQuat = new THREE.Quaternion(0,0,0,NaN);
+function setRenderScale(low){
+  const pr = low ? _LOW_PR : pixelRatioCap();
+  renderer.setPixelRatio(pr);
+  composer.setPixelRatio(pr);
+  gtaoPass.enabled = !low;                  // 转动时停用 GTAO
+}
+
 // ── Film Grain ────────────────────────────────────────────────────────────────
 // Direct RGBA pixel approach — no blend modes, works everywhere.
 // The grain canvas is a full-resolution 2D overlay drawn every frame.
@@ -8833,6 +8824,14 @@ if(driftOn){
   { const offVis = camera.position.z > 13;
     if(offVis !== officeGroup.visible){ officeGroup.visible = offVis; renderer.shadowMap.needsUpdate = true; } }
 
+  // 相机变换有变化即视为「在动」→ 降分辨率+停 GTAO；停动 _MOTION_HOLD 秒后恢复满质量
+  if(!_prevCamPos.equals(camera.position) || !_prevCamQuat.equals(camera.quaternion)){
+    _lastMotion = t; _prevCamPos.copy(camera.position); _prevCamQuat.copy(camera.quaternion);
+  }
+  const _wantLow = (t - _lastMotion) < _MOTION_HOLD;
+  if(_wantLow && _hiRes){ setRenderScale(true); _hiRes=false; }
+  else if(!_wantLow && !_hiRes){ setRenderScale(false); _hiRes=true; }
+
   composer.render();
   drawBloom(); // 亮部辉光叠层（每帧，避免相机移动时拖影）
 
@@ -8876,6 +8875,7 @@ const CAM_VIEWS = {
   '5': { name:'全景概览',    fov:68, theta:-0.22,   phi:0.09, camR:11.0, panX: 0.0, panZ: 1.0, panY: 0.30 },
   '6': { name:'教师视角',    fov:72, theta:Math.PI, phi:0.03, camR: 6.5, panX: 0.0, panZ: 3.0, panY: 0.15 },
   '7': { name:'后→前 广角', fov:78, theta:0.0,     phi:0.03, camR:11.5, panX: 0.0, panZ: 0.0, panY:-0.10 },
+  '8': { name:'办公室视角',  fov:80, theta:1.5708,  phi:0.10, camR: 4.8, panX:-1.5, panZ:21.5, panY: 0.70 }, // 后方办公室：门侧望向西窗
   '9': { name:'侧窗全景',    fov:70, theta:2.20,    phi:0.14, camR: 8.5, panX:-2.0, panZ: 4.0, panY: 0.30 },
 };
 const camLabel = document.createElement('div');

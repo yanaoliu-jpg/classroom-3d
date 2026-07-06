@@ -279,6 +279,14 @@ input[type=range].r:hover::-webkit-slider-thumb{transform:scale(1.25);box-shadow
     </div>
     <div class="row"><label>亮度</label><input type="range" class="b" id="corrInt" min="0" max="1.5" value="1.0" step="0.05"><span class="val" id="corrIntv">1.00</span></div>
   </div>
+  <!-- Office light -->
+  <div class="pcol">
+    <div class="ptitle b">
+      <div class="ldot" id="oDot" style="background:#f3efe4;box-shadow:0 0 5px rgba(243,239,228,.7)"></div>办公室灯 · Office
+      <div class="tog-row"><label for="offOn">开启</label><label class="tog"><input type="checkbox" id="offOn" checked><span class="togs"></span></label></div>
+    </div>
+    <div class="row"><label>亮度</label><input type="range" class="b" id="offInt" min="0" max="2" value="1.0" step="0.05"><span class="val" id="offIntv">1.00</span></div>
+  </div>
 </div>
 
 <script>
@@ -4578,16 +4586,22 @@ void main() {
 // 显式开启（r164 默认即 true）；白天视角因此会更暗，属预期，Task 6 重新平衡曝光/灯光。
 // 现在锁定色彩管线，避免 Task 3-4 的面光/反弹调参在 Task 6 翻转 CM 时全部失效。
 THREE.ColorManagement.enabled = true;
-const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true,powerPreference:'high-performance'}); // 提帧②：双显卡机器优先选独显（画面不变）
 // 超采样抗锯齿(SSAA)：>1 时以更高分辨率渲染再缩回，转动视角时边缘/高光闪烁明显减弱。
 // 若觉得掉帧/发烫，把 SUPERSAMPLE 调回 1.0；想更干净可调到 2.0（更吃显卡）。
 const SUPERSAMPLE = 1.0;
-const pixelRatioCap = ()=> Math.min(devicePixelRatio * SUPERSAMPLE, 2);
+const pixelRatioCap = ()=> Math.min(devicePixelRatio * SUPERSAMPLE, 1.75); // 提帧：Retina 上限 2→1.75(像素数≈−23%)；想更锐改回 2
 renderer.setSize(innerWidth,innerHeight);
 renderer.setPixelRatio(pixelRatioCap());
 renderer.useLegacyLights = false;                // Task6: 切换到物理正确灯光(光强单位=瓦特/坎德拉)；point/spot 需 ×π 补偿
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+// 提帧①：静态阴影贴图。只有 mainLight(太阳)投影且阴影是世界空间的——转相机时阴影不变，
+// 却每帧都在重画 4096² 阴影图。关掉自动更新，只在太阳/投影体变化时置 needsUpdate（见 markShadowsDirty）。
+renderer.shadowMap.autoUpdate = false;
+renderer.shadowMap.needsUpdate = true;          // 首帧先渲染一次阴影
+const _lastSunP = new THREE.Vector3(NaN,NaN,NaN); // 追踪太阳位置/朝向；变了才重画阴影(见 animate)
+const _lastSunT = new THREE.Vector3(NaN,NaN,NaN);
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.5; // Task6: 切物理灯后场景偏暗，曝光 0.50→1.5 提亮到自然明亮(日间 meanLum≈45-60)；ACES 高光肩部仍压住爆白(全视角 clippedWhite≈0)；夜间仍低(~7)
 renderer.outputColorSpace=THREE.SRGBColorSpace;  // r128→r164 迁移：替代已移除的 outputEncoding=sRGBEncoding
@@ -4930,7 +4944,7 @@ scene.add(ceil);
 
   // 横向龙骨（沿 X 方向）——铺满房间纵深 z∈[-5,14.5]（覆盖可用区 [-5,13.5]）
   const zBeams = [];
-  for(let z=-11; z<=8.6; z+=1.5) zBeams.push(ceilZ0 + z);
+  for(let z=-11; z<=10.1; z+=1.5) zBeams.push(ceilZ0 + z);   // 上限 8.6→10.1：格栅延伸到后墙(z=16)一带，随后墙后移补满
   zBeams.forEach(bz => {
     const b = new THREE.Mesh(new THREE.BoxGeometry(RW, beamH, beamT), beamMat);
     b.position.set(0, ceilY - beamH/2, bz);
@@ -4967,11 +4981,172 @@ backWall.castShadow=true; backWall.material.shadowSide=THREE.DoubleSide; // 挡�
 scene.add(backWall);
 
 // Front wall (student back, +Z end) — 挡光防止阳光从后面投进教室
+const BACK_Z = 16;   // 后墙(学生背后)世界 z：13→16 往后移，教室更进深；侧墙/地板/吊顶格栅联动延伸到此
 const frontWall=new THREE.Mesh(new THREE.PlaneGeometry(RW,RH),mat(0xf4f2ec,0.96,0,wallTex,wallNormal));
-frontWall.rotation.y=Math.PI;frontWall.position.set(0,RH/2,RD/2+6-4);
+frontWall.rotation.y=Math.PI;frontWall.position.set(0,RH/2,BACK_Z);
 frontWall.receiveShadow=true;
 frontWall.castShadow=true; frontWall.material.shadowSide=THREE.DoubleSide; // 挡光：学生后墙(z=13)现在阻挡阳光从教室后面穿墙投入 → 修复后端漏光(用户要求"后面加一堵墙")
 scene.add(frontWall);
+
+// ── 后墙（学生背后 frontWall, z=13）三件套：板报 / 分体空调 / 挂钟 ────────────────
+// 墙面朝 -z（frontWall.rotation.y=Math.PI），装饰件贴 z≈12.9（略入室内）、朝 -z（ry=Math.PI）。
+// 全部沿用 mat()/add()/CanvasTexture 套路，受光与既有墙面部件一致；不改动任何光照/几何。
+(function backWallDecor(){
+  const WALLZ = BACK_Z;            // frontWall.z
+  const FZ    = WALLZ - 0.07;      // 装饰件贴墙面（略入室内）
+  const FACE  = Math.PI;           // 朝 -z（面向教室）
+
+  // ── 1. 板报 / 宣传栏「学习园地」（左中，视平线，绿色铝框）─────────────────────
+  {
+    const BW=4.0, BH=1.6, BX=0, BY=1.5;   // 加大并居中
+    function makeXueXiTex(){
+      const W=1024, H=406, cv=document.createElement('canvas');
+      cv.width=W; cv.height=H; const ctx=cv.getContext('2d');
+      // 底色：浅米黄软木板 + 细纹
+      const bg=ctx.createLinearGradient(0,0,0,H);
+      bg.addColorStop(0,'#efe7cf'); bg.addColorStop(1,'#e0d6b6');
+      ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+      ctx.strokeStyle='rgba(150,120,60,0.16)'; ctx.lineWidth=1;
+      for(let i=0;i<240;i++){
+        const x=Math.random()*W, y=Math.random()*H, len=5+Math.random()*18, a=(Math.random()-0.5)*0.5;
+        ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+Math.cos(a)*len, y+Math.sin(a)*len*0.4); ctx.stroke();
+      }
+      // 顶部绿色标题横幅
+      const hb=ctx.createLinearGradient(0,0,W,0);
+      hb.addColorStop(0,'#1b5e20'); hb.addColorStop(0.5,'#2e7d32'); hb.addColorStop(1,'#1b5e20');
+      ctx.fillStyle=hb; ctx.fillRect(16,16,W-32,58);
+      ctx.fillStyle='#f1f8e9'; ctx.font='bold 36px serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('学  习  园  地', W/2, 45);
+      ctx.font='24px sans-serif'; ctx.fillStyle='#ffee58';
+      ctx.fillText('★', 70, 45); ctx.fillText('★', W-70, 45);
+      // 两栏
+      const col2=Math.floor(W*0.52), rowTop=92, rowBot=H-16;
+      ctx.strokeStyle='rgba(90,120,60,0.45)'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(col2,rowTop+6); ctx.lineTo(col2,rowBot-6); ctx.stroke();
+      // 左栏：学习心得
+      const lx=34;
+      ctx.fillStyle='#1b5e20'; ctx.font='bold 22px sans-serif'; ctx.textAlign='left';
+      ctx.fillText('📖 学习心得', lx, rowTop+30);
+      ctx.strokeStyle='#43a047'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(lx,rowTop+40); ctx.lineTo(col2-30,rowTop+40); ctx.stroke();
+      ctx.fillStyle='#33301f'; ctx.font='16px sans-serif';
+      ['· 温故而知新，可以为师矣','· 学而不思则罔，思而不学则殆',
+       '· 书山有路勤为径','· 每日一题，日积月累','· 错题本要及时整理'].forEach((t,i)=>{
+        ctx.fillText(t, lx, rowTop+74+i*38);
+      });
+      // 右栏：光荣榜
+      const mx=col2+26;
+      ctx.fillStyle='#8d3b00'; ctx.font='bold 22px sans-serif';
+      ctx.fillText('🌟 本周光荣榜', mx, rowTop+30);
+      ctx.strokeStyle='#f57f17'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(mx,rowTop+40); ctx.lineTo(W-34,rowTop+40); ctx.stroke();
+      ctx.fillStyle='#33301f'; ctx.font='16px sans-serif';
+      ['· 学习标兵：李  明','· 进步之星：王小雨','· 全勤奖：三组全体',
+       '· 优秀作业：赵  磊','· 板报设计：文娱委员'].forEach((t,i)=>{
+        ctx.fillText(t, mx, rowTop+74+i*38);
+      });
+      // 便利贴（右上角）
+      ctx.save(); ctx.translate(W-140,rowTop+64); ctx.rotate(-0.08);
+      ctx.fillStyle='#fff59d'; ctx.fillRect(-46,-40,92,80);
+      ctx.fillStyle='#7a6a00'; ctx.font='14px sans-serif'; ctx.textAlign='center';
+      ctx.fillText('加油！', 0, 4); ctx.restore();
+      const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; return t;
+    }
+    add(new THREE.PlaneGeometry(BW,BH),
+        new THREE.MeshStandardMaterial({map:makeXueXiTex(),roughness:0.92,metalness:0.0}),
+        BX,BY,FZ, 0,FACE,0);
+    // 绿色铝合金外框
+    const frMat=mat(0x2e7d32,0.5,0.35); const fT=0.055, fD=0.05;
+    [[0, BH/2+fT/2, BW+fT*2, fT],[0,-BH/2-fT/2, BW+fT*2, fT]].forEach(([ox,oy,w,h])=>{
+      add(new THREE.BoxGeometry(w,h,fD), frMat, BX+ox, BY+oy, FZ+0.005);
+    });
+    [[-BW/2-fT/2,0,fT,BH],[BW/2+fT/2,0,fT,BH]].forEach(([ox,oy,w,h])=>{
+      add(new THREE.BoxGeometry(w,h,fD), frMat, BX+ox, BY+oy, FZ+0.005);
+    });
+    // 四角图钉
+    [[-1,1],[1,1],[-1,-1],[1,-1]].forEach(([sx,sy])=>{
+      add(new THREE.SphereGeometry(0.028,8,8), mat(0xcc3322,0.5),
+          BX+sx*(BW/2-0.12), BY+sy*(BH/2-0.1), FZ+0.02);
+    });
+  }
+
+  // ── 2. 分体空调挂机（右上，近吊顶）────────────────────────────────────────────
+  {
+    const AW=1.25, AH=0.34, AD=0.24, AX=-3.9, AY=RH-0.42, AZ=WALLZ-AD/2-0.02;   // 换到另一边(-x)
+    // 白色机身（倒角盒，前脸微鼓）
+    const body=add(roundedBox(AW,AH,AD,0.05), mat(0xf6f6f2,0.55,0.0), AX,AY,AZ);
+    body.material.shadowSide=THREE.DoubleSide;
+    // 下前沿出风口格栅（深灰细横条）
+    const gW=AW*0.92, gH=0.055, gZ=AZ-AD/2+0.005;
+    add(new THREE.BoxGeometry(gW,gH,0.012), mat(0x3a3d40,0.7), AX, AY-AH/2+0.05, gZ, 0,FACE,0);
+    for(let i=0;i<7;i++){
+      add(new THREE.BoxGeometry(gW,0.006,0.014), mat(0x2b2d30,0.6),
+          AX, AY-AH/2+0.028+i*0.010, gZ+0.002, 0,FACE,0);
+    }
+    // 顶面细进风缝（浅灰）
+    add(new THREE.BoxGeometry(AW*0.8,0.004,AD*0.5), mat(0xdcdcd6,0.7), AX, AY+AH/2-0.006, AZ);
+    // 运行指示灯（绿点）
+    add(new THREE.SphereGeometry(0.012,8,8),
+        new THREE.MeshStandardMaterial({color:0x39d353,emissive:0x1e7a2c,emissiveIntensity:0.6,roughness:0.4}),
+        AX-AW/2+0.12, AY-AH/2+0.075, AZ-AD/2+0.006);
+    // 品牌小字条（浅灰细横杠，装饰）
+    add(new THREE.BoxGeometry(0.22,0.02,0.004), mat(0xbfbeb8,0.6),
+        AX+AW/2-0.28, AY+0.02, AZ-AD/2+0.006, 0,FACE,0);
+  }
+
+  // ── 3. 挂钟（上方居中偏右，石英白盘，定格 10:10）──────────────────────────────
+  {
+    const CX=3.5, CY=2.7, CR=0.26, CZ=WALLZ-0.05;   // 移到另一侧上方，与空调分列两边、板报居中
+    function makeClockTex(){
+      const S=512, cv=document.createElement('canvas');
+      cv.width=S; cv.height=S; const ctx=cv.getContext('2d');
+      const c=S/2, R=S*0.46;
+      // 白盘
+      ctx.fillStyle='#fbfbf8'; ctx.beginPath(); ctx.arc(c,c,R,0,Math.PI*2); ctx.fill();
+      // 分钟刻度
+      for(let i=0;i<60;i++){
+        const a=i*Math.PI/30, big=(i%5===0);
+        const r1=R*(big?0.83:0.88), r2=R*0.95;
+        ctx.strokeStyle=big?'#222':'#999'; ctx.lineWidth=big?4:2;
+        ctx.beginPath();
+        ctx.moveTo(c+Math.sin(a)*r1, c-Math.cos(a)*r1);
+        ctx.lineTo(c+Math.sin(a)*r2, c-Math.cos(a)*r2); ctx.stroke();
+      }
+      // 数字
+      ctx.fillStyle='#1a1a1a'; ctx.font='bold '+Math.round(S*0.10)+'px Georgia, serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      for(let n=1;n<=12;n++){
+        const a=n*Math.PI/6, r=R*0.70;
+        ctx.fillText(String(n), c+Math.sin(a)*r, c-Math.cos(a)*r);
+      }
+      // 指针（定格 10:10:37）
+      function hand(theta,len,wid,col,tail){
+        ctx.save(); ctx.translate(c,c); ctx.rotate(theta);
+        ctx.strokeStyle=col; ctx.lineWidth=wid; ctx.lineCap='round';
+        ctx.beginPath(); ctx.moveTo(0,tail||0); ctx.lineTo(0,-len); ctx.stroke(); ctx.restore();
+      }
+      const D=Math.PI/180;
+      hand(305*D, R*0.50, 10, '#111', R*0.10);   // 时针 10:10
+      hand(60*D,  R*0.74, 7,  '#111', R*0.12);    // 分针 :10
+      hand(222*D, R*0.80, 2.5,'#d33', R*0.16);    // 秒针 :37
+      // 中心轴
+      ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(c,c,R*0.045,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#d33'; ctx.beginPath(); ctx.arc(c,c,R*0.020,0,Math.PI*2); ctx.fill();
+      const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; return t;
+    }
+    // 表盘
+    add(new THREE.CircleGeometry(CR,48),
+        new THREE.MeshStandardMaterial({map:makeClockTex(),roughness:0.6,metalness:0.0}),
+        CX,CY,CZ, 0,FACE,0);
+    // 黑色边框（浅圆柱，圈住盘面、给厚度）
+    const rim=add(new THREE.CylinderGeometry(CR+0.02,CR+0.02,0.04,48,1,true),
+                  mat(0x1c1c1c,0.5,0.2), CX,CY,CZ-0.005, Math.PI/2,0,0);
+    rim.castShadow=true;
+    // 背板（把边框后方封住）
+    add(new THREE.CircleGeometry(CR+0.02,48), mat(0x2a2a2a,0.7), CX,CY,CZ-0.03, 0,0,0);
+  }
+})();
 
 // ── 窗户尺寸常量（左墙挖洞与下方窗户部件共用）────────────────────────────────
 const winPositions=[-6, -2, 2]; // 窗心 z=[0,4,8]
@@ -4985,7 +5160,7 @@ const WIN_MID = WIN_BOTTOM + WIN_H * 0.68; // 上下分隔线（部件用）
 // 让窗户成为真正的开口，最大限度呈现光照进教室。窗洞尺寸随 WIN_* 常量联动。
 let leftWall;
 {
-  const LWALL_Z0 = -RD/2+6, LWALL_Z1 = -RD/2+6+RD;   // z ∈ [-5, 17]
+  const LWALL_Z0 = -RD/2+6, LWALL_Z1 = BACK_Z+2;   // z ∈ [-5, 18]：往后延伸盖过后墙(z=16)，封住墙角
   const shape = new THREE.Shape();
   shape.moveTo(LWALL_Z0, 0); shape.lineTo(LWALL_Z1, 0);
   shape.lineTo(LWALL_Z1, RH); shape.lineTo(LWALL_Z0, RH); shape.lineTo(LWALL_Z0, 0);
@@ -5015,7 +5190,7 @@ let leftWall;
 
 // Right wall — 改为带高窗洞口的拼接墙（两门之间、贴天花板的横向高窗）
 // 右墙世界 z 跨度：中心 z=6，宽 RD=22 → z ∈ [-5, 17]
-const RWALL_X = RW/2, RWALL_Z0 = -RD/2+6, RWALL_Z1 = -RD/2+6+RD; // [-5,17]
+const RWALL_X = RW/2, RWALL_Z0 = -RD/2+6, RWALL_Z1 = BACK_Z+2; // [-5,18]：与左墙一样往后延伸盖过后墙
 // 高窗洞口参数（前门 z=-1.8 与后门 z=8 之间，中点≈3）
 const WIN_CZ = 3.0, RWIN_W = 1.5;          // 窗中心 z 与宽度
 const WIN_YB = 2.30, WIN_YT = 3.28;        // 窗下沿/上沿（RH=3.5，上沿贴近吊顶）
@@ -5058,10 +5233,10 @@ const RWALL_CZ = (RWALL_Z0+RWALL_Z1)/2;
   // 墙裙(护墙 + 踢脚线)：满宽，与其他墙一致（addWainscot 假设居中平面，此处单独按本墙局部坐标摆放）
   const DADO_TOP = 1.12, SKIRT_TOP = 0.12, dadoH = DADO_TOP - SKIRT_TOP;
   const dadoMat = mat(0xe7ddc6, 0.9, 0, wallTex); dadoMat.side = THREE.DoubleSide;
-  const dado = new THREE.Mesh(new THREE.PlaneGeometry(RD, dadoH), dadoMat);
+  const dado = new THREE.Mesh(new THREE.PlaneGeometry(RWALL_Z1-RWALL_Z0, dadoH), dadoMat);
   dado.position.set(RWALL_CZ, (DADO_TOP+SKIRT_TOP)/2, 0.012); dado.receiveShadow = true; rightWall.add(dado);
   const skirtMat = mat(0xa79d8d, 0.65); skirtMat.side = THREE.DoubleSide;
-  const skirt = new THREE.Mesh(new THREE.PlaneGeometry(RD, SKIRT_TOP), skirtMat);
+  const skirt = new THREE.Mesh(new THREE.PlaneGeometry(RWALL_Z1-RWALL_Z0, SKIRT_TOP), skirtMat);
   skirt.position.set(RWALL_CZ, SKIRT_TOP/2, 0.018); skirt.receiveShadow = true; rightWall.add(skirt);
   // ↑ receiveShadow：踢脚线必须和上方 dado 一样接收阴影。漏了它 → 太阳照到贴地踢脚线时它永不进阴影，
   // 而墙体在阴影里发黑，右墙底部便浮出一条"随主光角度不变、始终发光的粉白亮带"(用户报告)。
@@ -5076,7 +5251,7 @@ const corrLeak = {};       // 入窗光效：spot / 玻璃 / 地面光斑 / 墙�
 
 const CORR_D  = 1.9;                              // 走廊进深
 const CORR_X0 = RW/2, CORR_X1 = RW/2 + CORR_D;    // 走廊内/外侧 x
-const CORR_Z0 = -4.5, CORR_Z1 = 9.5;             // 走廊 z 跨度(覆盖两门与高窗)
+const CORR_Z0 = -4.5, CORR_Z1 = 21.5;            // 走廊 z 跨度(9.5→21.5：向后延伸至办公室，尽头经连廊接办公室门)
 const CORR_CX = (CORR_X0+CORR_X1)/2, CORR_CZ = (CORR_Z0+CORR_Z1)/2;
 const CORR_LEN = CORR_Z1 - CORR_Z0;
 
@@ -5108,7 +5283,7 @@ const corrWallMat  = corrGlowMat(0xdadfd4, 0.03, 0.28);   // emisMax 0.58→0.28
   m.rotation.y=Math.PI;    m.position.set(CORR_CX, RH/2, CORR_Z1); m.receiveShadow=true; scene.add(m); })();            // z+ 封口(法线-z)
 
 // 一排吸顶灯(4 盏)：自发光灯板 + 下方淡光晕，沿走廊吊顶等距排列
-const fixtureZ = [-2, 1, 4, 7];
+const fixtureZ = [-2, 1, 4, 7, 10, 13, 16, 19];   // 后段(10~19)随走廊延伸补灯
 const corrLampLights = [];   // 每盏吸顶灯下的真实点光源(替代原来那盏浮在后门口的孤光)：走廊由灯管发光照亮
 fixtureZ.forEach(z=>{
   const panelMat = new THREE.MeshStandardMaterial({ color:0xf6f8ff, emissive:0xeaf0ff, emissiveIntensity:0.05, roughness:0.4 });
@@ -7083,8 +7258,8 @@ const fluoroLights = [];   // 每组灯具下方一盏点光源（12 盏，位�
   // Row 4 back edge: startZ + 3*rowSpacing + deskD/2 + chair space ≈ z=9.5
   // Front wall inner face ≈ RD/2+6-4 = 13
   // 加宽至盖住主地板与前墙之间的缝隙（原本 z∈[6,8.5] 无地板，会露出黑色背景）
-  const exFloorZ = 9.5;           // centre of the extra strip
-  const exFloorD = 8.0;           // depth of strip → 覆盖 z∈[5.5,13.5]，与主地板重叠 0.5
+  const exFloorZ = 10.9;          // centre of the extra strip（后墙 13→16 后地板同步延伸）
+  const exFloorD = 10.8;          // depth of strip → 覆盖 z∈[5.5,16.3]，与主地板重叠 0.5、盖到后墙(16)后一点
   // 关键：extraFloor 必须与主地板视觉无缝——同反照率(0xaaa69b)/粗糙度(0.50)/法线&粗糙贴图。
   // 之前用 0xd8d4cc + 无法线/粗糙贴图 + roughness0.94 → 一块更亮更哑的"平板方块"，接缝在 z=6，
   // 且不随光照角度变化(用户反馈"自定义模式无论怎么调光角都有这块光影")。
@@ -7104,6 +7279,257 @@ const fluoroLights = [];   // 每组灯具下方一盏点光源（12 盏，位�
   extraFloor.receiveShadow = true;
   scene.add(extraFloor);
 }
+
+// ══ 独立办公室（教室后方 z>18；东墙开门经走廊连通；仿参考图：工位隔断+办公椅+清窗）════════
+// 自成一体的房间：4 实墙+实吊顶(castShadow) 把教室全局太阳挡在外，内部由自带 LED 灯板+窗侧暖
+// SpotLight 照明；远端墙开两扇「教室同款」白框清窗；东墙(x=4)开门→连接走廊延伸段。
+// 灯光句柄暴露给面板「办公室灯」开关/亮度控制。
+const officeLights=[];   // {light, base} 供 syncOffice() 缩放
+const officePanels=[];   // 发光灯板材质，随开关/亮度改 emissiveIntensity
+const OFF_DOORZ = 20.2;  // 东墙门中心 z（连接走廊延伸段/连廊）
+const officeGroup = new THREE.Group(); scene.add(officeGroup); // 提帧⑤：整间办公室挂此组，被后墙遮挡时整组隐藏
+(function officeRoom(){
+  const scene = officeGroup;   // 提帧⑤：本 IIFE 内所有 scene.add 重定向到可隐藏组（组为单位变换，世界坐标不变）
+  const add = (geo,material,x,y,z,rx=0,ry=0,rz=0)=>{ const me=new THREE.Mesh(geo,material); me.position.set(x,y,z); me.rotation.set(rx,ry,rz); me.castShadow=true; me.receiveShadow=true; officeGroup.add(me); return me; }; // 局部 add 覆盖全局：窗框/门框等也进组
+  const OW=8, OD=6, OH=RH;                 // 8(宽)×6(深)×3.5(高)
+  const Z0=18.5, Z1=Z0+OD;                // z ∈ [18.5, 24.5]
+  const X0=-OW/2, X1=OW/2;                // x ∈ [-4, 4]
+  const OCX=0, OCZ=(Z0+Z1)/2;            // 房间中心 (0, ·, 21.5)
+
+  // ── 木地板纹理（暖色木纹长条，仿参考图）─────────────────────────────────────
+  function woodTex(){
+    const W=512, H=512, cv=document.createElement('canvas');
+    cv.width=W; cv.height=H; const ctx=cv.getContext('2d');
+    ctx.fillStyle='#b3803f'; ctx.fillRect(0,0,W,H);
+    const plank=74;
+    for(let y=0; y<H; y+=plank){
+      const base=170+Math.floor(Math.random()*24)-12;
+      ctx.fillStyle=`rgb(${base},${Math.floor(base*0.72)},${Math.floor(base*0.42)})`;
+      ctx.fillRect(0, y, W, plank-2);
+      // 木纹长丝
+      for(let i=0;i<26;i++){
+        ctx.strokeStyle=`rgba(90,55,20,${0.05+Math.random()*0.10})`;
+        ctx.lineWidth=1;
+        const gy=y+2+Math.random()*(plank-6);
+        ctx.beginPath(); ctx.moveTo(0,gy);
+        for(let x=0;x<=W;x+=32) ctx.lineTo(x, gy+Math.sin(x*0.05+y)*1.6);
+        ctx.stroke();
+      }
+      // 板缝
+      ctx.fillStyle='rgba(60,38,14,0.55)'; ctx.fillRect(0, y+plank-2, W, 2);
+    }
+    const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace;
+    t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(3,2.2);
+    return t;
+  }
+  const floorO=new THREE.Mesh(new THREE.PlaneGeometry(OW,OD), mat(0x9a7038,0.55,0.04,woodTex()));
+  floorO.rotation.x=-Math.PI/2; floorO.position.set(OCX,0.0,OCZ);
+  floorO.receiveShadow=true; scene.add(floorO);
+
+  // ── 墙体（暖白，带护墙裙；全部 castShadow 封住全局太阳）─────────────────────
+  const wMat=mat(0xf1eee7,0.95); wMat.side=THREE.DoubleSide; wMat.shadowSide=THREE.DoubleSide;
+  function wallSeal(m){ m.receiveShadow=true; m.castShadow=true; scene.add(m); return m; }
+  // 前墙(z=Z0,面向+z入室)
+  wallSeal(Object.assign(new THREE.Mesh(new THREE.PlaneGeometry(OW,OH),wMat),{}))
+    .position.set(OCX,OH/2,Z0);
+  // 左墙(x=X0)
+  { const m=new THREE.Mesh(new THREE.PlaneGeometry(OD,OH),wMat); m.rotation.y=Math.PI/2; m.position.set(X0,OH/2,OCZ); wallSeal(m); }
+  // 东墙(x=X1)：开门洞（ShapeGeometry 挖洞）+ 门框 + 门扇 → 经走廊延伸段连通
+  {
+    const dHW=0.6, dTop=2.1;
+    const s=new THREE.Shape();
+    s.moveTo(Z0,0); s.lineTo(Z1,0); s.lineTo(Z1,OH); s.lineTo(Z0,OH); s.lineTo(Z0,0);
+    const h=new THREE.Path();
+    h.moveTo(OFF_DOORZ-dHW,0); h.lineTo(OFF_DOORZ+dHW,0); h.lineTo(OFF_DOORZ+dHW,dTop); h.lineTo(OFF_DOORZ-dHW,dTop); h.lineTo(OFF_DOORZ-dHW,0);
+    s.holes.push(h);
+    const m=new THREE.Mesh(new THREE.ShapeGeometry(s), wMat);
+    m.rotation.y=-Math.PI/2; m.position.set(X1,0,0);
+    m.receiveShadow=true; m.castShadow=true; scene.add(m);
+    // 门框
+    const jamb=mat(0xdedacf,0.7);
+    add(new THREE.BoxGeometry(0.09,dTop+0.06,0.10), jamb, X1, dTop/2, OFF_DOORZ-dHW);
+    add(new THREE.BoxGeometry(0.09,dTop+0.06,0.10), jamb, X1, dTop/2, OFF_DOORZ+dHW);
+    add(new THREE.BoxGeometry(0.09,0.09,dHW*2+0.16), jamb, X1, dTop, OFF_DOORZ);
+    // 门扇（校园款：下绿漆 + 上玻璃，半开约 35°，铰在 -z 侧，朝室内开）
+    const LW=dHW*2-0.08, LH=dTop-0.06, hingeZ=OFF_DOORZ-dHW+0.04;
+    const leaf=new THREE.Group(); leaf.position.set(X1-0.02,0,hingeZ); leaf.rotation.y=-0.62; scene.add(leaf);
+    const lp=(geo,mm,x,y,z,rx=0,ry=0,rz=0)=>{ const me=new THREE.Mesh(geo,mm); me.position.set(x,y,z); me.rotation.set(rx,ry,rz); me.castShadow=false; me.receiveShadow=false; leaf.add(me); };
+    lp(new THREE.BoxGeometry(0.04,LH,LW), mat(0x3f6b4a,0.6), 0, LH/2+0.03, LW/2);
+    lp(new THREE.BoxGeometry(0.05,LH*0.40,LW*0.80), new THREE.MeshStandardMaterial({color:0xbfe0ea,roughness:0.25,transparent:true,opacity:0.5}), 0.006, LH*0.73, LW/2);
+    lp(new THREE.CylinderGeometry(0.018,0.018,0.12,8), mat(0xcfcfcf,0.4,0.6), 0.035, 1.02, LW-0.14, Math.PI/2,0,0);
+  }
+
+  // 护墙裙 + 踢脚线（沿三面实墙，简版）
+  const dadoMat=mat(0xe7ddc6,0.9), skirtMat=mat(0xa79d8d,0.65);
+  [dadoMat,skirtMat].forEach(mm=>mm.side=THREE.DoubleSide);
+  function band(w,h,yc,x,z,ry,mm){ const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),mm); m.position.set(x,yc,z); m.rotation.y=ry; m.receiveShadow=true; scene.add(m); }
+  // 只做前墙/左墙的护墙裙（东墙有门洞→跳过，避免踢脚线横穿门口）
+  [[Z0,0],[X0,Math.PI/2]].forEach(([p,ry],i)=>{
+    const len = i===0?OW:OD;
+    const wx = i===0?OCX:(p + (ry>0?0.012:-0.012)), wz=i===0?(Z0+0.012):OCZ;
+    band(len,1.0,0.56, wx,wz, ry, dadoMat);
+    band(len,0.12,0.06, wx,wz, ry, skirtMat);
+  });
+
+  // ── 远端窗墙(z=Z1)：教室同款白框清窗 ×2（ShapeGeometry 挖两洞）──────────────
+  const WW=2.4, WH=2.4, WB=0.6, WT=WB+WH;   // 窗宽/高/下沿/上沿
+  const winCX=[-1.6, 1.6];                   // 两窗中心 x（中间留 0.8 墙垛）
+  {
+    const shape=new THREE.Shape();
+    shape.moveTo(X0,0); shape.lineTo(X1,0); shape.lineTo(X1,OH); shape.lineTo(X0,OH); shape.lineTo(X0,0);
+    winCX.forEach(cx=>{
+      const h=new THREE.Path();
+      h.moveTo(cx-WW/2,WB); h.lineTo(cx+WW/2,WB); h.lineTo(cx+WW/2,WT); h.lineTo(cx-WW/2,WT); h.lineTo(cx-WW/2,WB);
+      shape.holes.push(h);
+    });
+    const geo=new THREE.ShapeGeometry(shape);
+    const m=new THREE.Mesh(geo, wMat);
+    m.rotation.y=Math.PI; m.position.set(0,0,Z1);   // 面向 -z（入室）
+    m.receiveShadow=true; m.castShadow=true; scene.add(m);
+  }
+  // 白框 + 窗台（每扇窗）
+  const fMat=mat(0xf0eeea,0.65), fw=0.06;
+  const sillMat=mat(0xe8e4dc,0.8);
+  winCX.forEach(cx=>{
+    // 外框四边（贴 z=Z1 内侧）
+    const zf=Z1-0.03;
+    add(new THREE.BoxGeometry(fw,WH+fw*2,fw), fMat, cx-WW/2, WB+WH/2, zf);
+    add(new THREE.BoxGeometry(fw,WH+fw*2,fw), fMat, cx+WW/2, WB+WH/2, zf);
+    add(new THREE.BoxGeometry(WW+fw*2,fw,fw), fMat, cx, WT, zf);
+    add(new THREE.BoxGeometry(WW+fw*2,fw,fw), fMat, cx, WB, zf);
+    // 竖中梃（把每扇分两格，像参考图）
+    add(new THREE.BoxGeometry(fw*0.7,WH,fw), fMat, cx, WB+WH/2, zf);
+    // 窗台
+    add(new THREE.BoxGeometry(WW+0.14,0.05,0.16), sillMat, cx, WB-0.02, Z1-0.09);
+  });
+  // 窗外亮背板（天空 + 远处住宅楼剪影），让清窗透出白天光
+  function extTex(){
+    const W=1024,H=512,cv=document.createElement('canvas'); cv.width=W;cv.height=H;
+    const ctx=cv.getContext('2d');
+    const sky=ctx.createLinearGradient(0,0,0,H);
+    sky.addColorStop(0,'#bcd3ea'); sky.addColorStop(0.6,'#e6eef6'); sky.addColorStop(1,'#f6f1e6');
+    ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
+    // 远处住宅楼群（暖光立面 + 窗格）
+    for(let b=0;b<7;b++){
+      const bw=90+Math.random()*70, bx=b*150-20, bh=180+Math.random()*180, by=H-bh;
+      const shade=200-b*6;
+      ctx.fillStyle=`rgb(${shade},${shade-18},${shade-40})`;
+      ctx.fillRect(bx,by,bw,bh);
+      // 窗格
+      for(let wy=by+14; wy<H-16; wy+=22)
+        for(let wx2=bx+10; wx2<bx+bw-10; wx2+=20){
+          ctx.fillStyle=Math.random()<0.5?'rgba(120,140,160,0.6)':'rgba(255,236,190,0.7)';
+          ctx.fillRect(wx2,wy,11,13);
+        }
+    }
+    const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; return t;
+  }
+  { const m=new THREE.Mesh(new THREE.PlaneGeometry(OW+1.2,OH+0.6), new THREE.MeshBasicMaterial({map:extTex()}));
+    m.rotation.y=Math.PI; m.position.set(0,OH/2,Z1+0.6); scene.add(m); }
+
+  // ── 吊顶（实顶 castShadow + 格栅 + 2 灯板）────────────────────────────────────
+  const ceilO=new THREE.Mesh(new THREE.PlaneGeometry(OW,OD), mat(0xeeece6,0.95));
+  ceilO.rotation.x=Math.PI/2; ceilO.position.set(OCX,OH,OCZ);
+  ceilO.receiveShadow=true; ceilO.castShadow=true; ceilO.material.shadowSide=THREE.DoubleSide; scene.add(ceilO);
+  { const beamMat=mat(0xd6d2cc,0.85), bt=0.05, bh=0.05;
+    for(let x=X0+1; x<X1; x+=1.4){ const b=new THREE.Mesh(new THREE.BoxGeometry(bt,bh,OD),beamMat); b.position.set(x,OH-bh/2,OCZ); b.receiveShadow=true; scene.add(b);}
+    for(let z=Z0+1; z<Z1; z+=1.4){ const b=new THREE.Mesh(new THREE.BoxGeometry(OW,bh,bt),beamMat); b.position.set(OCX,OH-bh/2,z); b.receiveShadow=true; scene.add(b);} }
+  // 2 灯板（发光罩）+ 点光源
+  [[-1.6,20.6],[1.6,20.6],[-1.6,22.6],[1.6,22.6]].forEach(([lx,lz],i)=>{
+    const pmat=new THREE.MeshStandardMaterial({color:0xf6f4ee,emissive:0xf3efe4,emissiveIntensity:0.9,roughness:0.7});
+    const panel=new THREE.Mesh(new THREE.PlaneGeometry(1.1,0.5), pmat);
+    panel.rotation.x=Math.PI/2; panel.position.set(lx,OH-0.06,lz); scene.add(panel);
+    officePanels.push(pmat);
+    if(i===0||i===3){ const pl=new THREE.PointLight(0xf5f3ee, 3.4, 8, 2); pl.position.set(lx,OH-0.3,lz); pl.castShadow=false; scene.add(pl); officeLights.push({light:pl,base:3.4}); } // 4→2 盏点光（对角覆盖），减灯提帧
+  });
+  // 窗侧暖阳 SpotLight（斜射木地板，制造参考图那种暖光斜带；不投影，仅照明）
+  { const sp=new THREE.SpotLight(0xffd7a0, 26, 14, Math.PI/5, 0.55, 2);
+    sp.position.set(0, 3.2, Z1-0.3); sp.target.position.set(-0.5,0,20.2);
+    sp.castShadow=false; scene.add(sp); scene.add(sp.target); officeLights.push({light:sp,base:26}); }
+
+  // ══ 工位隔断 + 办公椅 ══════════════════════════════════════════════════════
+  const deskTopMat=mat(0xeceae2,0.5), pedMat=mat(0xcbb083,0.6);
+  const woodPanelMat=mat(0xbf9f68,0.65), greenBandMat=mat(0x7cb342,0.45);
+  // 磨砂玻璃：改用廉价 MeshStandard 半透（去掉 transmission → 不再触发昂贵的透射渲染 pass，提帧关键）
+  const glassMat=new THREE.MeshStandardMaterial({color:0xe2ebee,roughness:0.4,transparent:true,opacity:0.4,metalness:0});
+  const monMat=mat(0x18181a,0.5), baseMat=mat(0x2a2a2c,0.5,0.4);
+  const meshBlue=mat(0x274a86,0.7), meshBlack=mat(0x1c1c1e,0.7);
+
+  // 家具网格：castShadow/receiveShadow=false —— 办公室已被四壁+实顶封住全局太阳，室内唯一光源
+  // 是不投影的点光/SpotLight → 家具无需进阴影贴图，省大量 shadow draw call（提帧关键）。
+  function pm(g,geo,m,x,y,z,rx=0,ry=0,rz=0){ const me=new THREE.Mesh(geo,m); me.position.set(x,y,z); me.rotation.set(rx,ry,rz); me.castShadow=false; me.receiveShadow=false; g.add(me); return me; }
+
+  function chair(g, ox, oz, seatMat){
+    const cg=new THREE.Group(); cg.position.set(ox,0,oz); g.add(cg);
+    // 五星脚 + 滚轮
+    for(let i=0;i<5;i++){ const a=i*2*Math.PI/5;
+      pm(cg,new THREE.BoxGeometry(0.05,0.03,0.30),baseMat, Math.sin(a)*0.14,0.05,Math.cos(a)*0.14, 0,a,0);
+      pm(cg,new THREE.SphereGeometry(0.03,8,8),baseMat, Math.sin(a)*0.27,0.03,Math.cos(a)*0.27);
+    }
+    pm(cg,new THREE.CylinderGeometry(0.032,0.032,0.42,12),baseMat, 0,0.26,0);
+    pm(cg,new THREE.BoxGeometry(0.48,0.09,0.46),seatMat, 0,0.48,0);           // 座
+    pm(cg,new THREE.BoxGeometry(0.46,0.54,0.06),seatMat, 0,0.80,-0.22,-0.14); // 靠背(网面)微仰
+    [-1,1].forEach(s=>{ pm(cg,new THREE.BoxGeometry(0.05,0.05,0.34),baseMat, s*0.27,0.62,-0.02);
+      pm(cg,new THREE.BoxGeometry(0.04,0.16,0.04),baseMat, s*0.27,0.55,0.06); });
+  }
+
+  // 单个工位：桌 + 后隔断(木+绿条+磨砂玻璃) + 侧隔断 + 显示器 + 椅
+  function workstation(px, pz, ry, seatMat, pedSide){
+    const g=new THREE.Group(); g.position.set(px,0,pz); g.rotation.y=ry; scene.add(g);
+    // 桌面
+    pm(g,new THREE.BoxGeometry(1.2,0.04,0.6),deskTopMat, 0,0.74,0);
+    // 柜脚(一侧) + 另一侧板腿
+    pm(g,new THREE.BoxGeometry(0.42,0.70,0.55),pedMat, pedSide*0.34,0.35,0);
+    pm(g,new THREE.BoxGeometry(0.04,0.70,0.55),pedMat, -pedSide*0.56,0.35,0);
+    pm(g,new THREE.BoxGeometry(1.16,0.44,0.03),pedMat, 0,0.50,-0.27);          // 挡板(occupant 侧)
+    // 后隔断(+z 侧，靠窗/中脊)
+    pm(g,new THREE.BoxGeometry(1.24,1.0,0.04),woodPanelMat, 0,0.50,0.32);
+    pm(g,new THREE.BoxGeometry(1.24,0.10,0.05),greenBandMat, 0,1.05,0.32);
+    pm(g,new THREE.BoxGeometry(1.24,0.28,0.02),glassMat, 0,1.24,0.32);
+    // 侧隔断(+x 侧)
+    pm(g,new THREE.BoxGeometry(0.04,1.0,0.66),woodPanelMat, 0.62,0.50,0.0);
+    pm(g,new THREE.BoxGeometry(0.05,0.10,0.66),greenBandMat, 0.62,1.05,0.0);
+    pm(g,new THREE.BoxGeometry(0.02,0.28,0.66),glassMat, 0.62,1.24,0.0);
+    // 显示器(面向 occupant, -z)
+    pm(g,new THREE.BoxGeometry(0.52,0.32,0.03),monMat, 0,0.98,0.20);
+    pm(g,new THREE.BoxGeometry(0.06,0.14,0.05),monMat, 0,0.83,0.24);
+    pm(g,new THREE.BoxGeometry(0.22,0.02,0.14),monMat, 0,0.76,0.24);
+    // 椅（occupant 侧 -z）
+    chair(g, 0, -0.52, seatMat);
+  }
+
+  // 两个 pod（左/右），各 2×2 背靠背，中间中脊；中间留过道通往窗户
+  const pods=[[-2.0,20.9],[2.0,20.9]];
+  pods.forEach(([px,pz],pi)=>{
+    workstation(px-0.7, pz-1.1, 0,        pi===0?meshBlue:meshBlack,  1);
+    workstation(px+0.7, pz-1.1, 0,        pi===0?meshBlack:meshBlue, -1);
+    workstation(px-0.7, pz+1.1, Math.PI,  pi===0?meshBlack:meshBlue,  1);
+    workstation(px+0.7, pz+1.1, Math.PI,  pi===0?meshBlue:meshBlack, -1);
+  });
+})();
+
+// ══ 连廊：把走廊(x∈[7,8.9])向西接到办公室东墙门(x=4)，形成 L 形通道 ═══════════════════
+// 复用走廊材质(emissive 自发光+走廊灯电平驱动)，灯挂进 corrLampLights/corrGlowMats → 受「走廊灯」控制。
+(function officeCorridorLink(){
+  const OX1=4;                        // 办公室东墙 x（与 office X1 一致）
+  const cz0=19.0, cz1=CORR_Z1;        // 连廊 z 跨度（含门 z=OFF_DOORZ=20.2；南接走廊尽头 21.5）
+  const cx0=OX1, cx1=CORR_X0;          // x∈[4,7]
+  const ccx=(cx0+cx1)/2, ccz=(cz0+cz1)/2, cw=cx1-cx0, cl=cz1-cz0;
+  const S=(m)=>{ m.receiveShadow=true; scene.add(m); return m; };
+  // 地面 / 吊顶
+  { const m=new THREE.Mesh(new THREE.PlaneGeometry(cw,cl),corrFloorMat); m.rotation.x=-Math.PI/2; m.position.set(ccx,0,ccz); S(m); }
+  { const m=new THREE.Mesh(new THREE.PlaneGeometry(cw,cl),corrCeilMat);  m.rotation.x=Math.PI/2;  m.position.set(ccx,RH-0.04,ccz); m.castShadow=true; S(m); }
+  // 北墙(z=cz0) / 南墙(z=cz1)
+  { const m=new THREE.Mesh(new THREE.PlaneGeometry(cw,RH),corrWallMat); m.position.set(ccx,RH/2,cz0); m.castShadow=true; S(m); }
+  { const m=new THREE.Mesh(new THREE.PlaneGeometry(cw,RH),corrWallMat); m.rotation.y=Math.PI; m.position.set(ccx,RH/2,cz1); m.castShadow=true; S(m); }
+  // 走廊西墙填补段(x=CORR_X0=7, z∈[18,cz0])：教室右墙止于 z=18 → 补到连廊口，封住此段走廊西侧
+  { const m=new THREE.Mesh(new THREE.PlaneGeometry(cz0-18,RH),corrWallMat); m.rotation.y=Math.PI/2; m.position.set(CORR_X0,RH/2,(18+cz0)/2); m.castShadow=true; S(m); }
+  // 连廊照明：1 盏吸顶灯板 + 点光（挂进走廊灯系统）
+  const pmat=new THREE.MeshStandardMaterial({color:0xf6f8ff,emissive:0xeaf0ff,emissiveIntensity:0.9,roughness:0.4});
+  corrGlowMats.push({m:pmat,baseEmis:0.1,emisMax:2.4,isLamp:true});
+  const panel=new THREE.Mesh(new THREE.BoxGeometry(1.0,0.05,0.16),pmat); panel.position.set(ccx,RH-0.10,ccz); scene.add(panel);
+  const pl=new THREE.PointLight(0xdbe6f2,0,4.6,2); pl.position.set(ccx,RH-0.28,ccz); scene.add(pl); corrLampLights.push(pl);
+})();
 
 // ── AIR CONDITIONER — 讲台侧左角立式柜机 ──────────────────────────────────────
 // 落地柜机：贴左墙(-X)，宽面朝向教室内部(+X)，从地面起立。
@@ -7618,6 +8044,17 @@ function syncCorridor(){
   document.getElementById('corrIntv').textContent = bri.toFixed(2);
 }
 
+// 办公室灯：开关 + 亮度（缩放 officeLights 基准强度 + 灯板 emissive）
+function syncOffice(){
+  const on  = document.getElementById('offOn').checked;
+  const bri = +document.getElementById('offInt').value;
+  officeLights.forEach(o => o.light.intensity = on ? o.base * bri : 0);
+  officePanels.forEach(m => m.emissiveIntensity  = on ? 0.9 * bri : 0.0);
+  const od = document.getElementById('oDot');
+  if(od) od.style.opacity = on ? '1' : '0.3';
+  document.getElementById('offIntv').textContent = bri.toFixed(2);
+}
+
 // ── Light marker (main window light only, draggable) ──────────────────────────
 function makeMarker(color){
   const g=new THREE.Group();
@@ -7750,6 +8187,9 @@ document.getElementById('ceilOn').addEventListener('change',()=>{sync();markCust
 document.getElementById('corrOn').addEventListener('change',()=>{syncCorridor();markCustom();});
 document.getElementById('corrInt').addEventListener('input',()=>{syncCorridor();markCustom();});
 syncCorridor();
+document.getElementById('offOn').addEventListener('change',()=>{syncOffice();markCustom();});
+document.getElementById('offInt').addEventListener('input',()=>{syncOffice();markCustom();});
+syncOffice();
 
 // ── Presets ───────────────────────────────────────────────────────────────────
 const PRESETS={
@@ -8390,6 +8830,17 @@ if(driftOn){
     const baseOp = isWall ? 0.16 : (mesh.geometry.parameters.width > 1.5 ? 0.35 : 0.28);
     dm.opacity = Math.max(0, baseOp * breathe * dappleBase);
   });
+
+  // 提帧①：太阳移动检测 → 仅当太阳位置/朝向变化才重画 4096² 阴影贴图
+  // （一处覆盖 sync 滑块 / 时间轴播放 / 拖拽光标 / preset 所有来源；纯转相机时阴影不重算）
+  if(!_lastSunP.equals(mainLight.position) || !_lastSunT.equals(mainLight.target.position)){
+    renderer.shadowMap.needsUpdate = true;
+    _lastSunP.copy(mainLight.position); _lastSunT.copy(mainLight.target.position);
+  }
+  // 提帧⑤：办公室在后墙(z=16)后方——相机处于教室侧(z<13)时被实墙完全遮挡，整组不绘制。
+  // 可见性切换时刷新一次阴影：进办公室要让办公室四壁重新进阴影贴图挡住太阳(否则残留旧图会漏光)。
+  { const offVis = camera.position.z > 13;
+    if(offVis !== officeGroup.visible){ officeGroup.visible = offVis; renderer.shadowMap.needsUpdate = true; } }
 
   composer.render();
   drawBloom(); // 亮部辉光叠层（每帧，避免相机移动时拖影）

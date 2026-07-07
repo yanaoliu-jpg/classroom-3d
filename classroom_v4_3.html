@@ -102,6 +102,59 @@ canvas{display:block;position:absolute;top:0;left:0;}
   bottom:0;
 }
 #panelToggle:hover{color:var(--t1);}
+/* 主面板现只剩「窗光」一组：单列居中，避免偏左（此规则置于媒体查询之后，各宽度均居中） */
+#panel{grid-template-columns:minmax(240px,360px);justify-content:center;gap:2px 0;}
+/* ── 设置浮层（室内三种灯：天花板/走廊/办公室） ── */
+#settingsBtn.on{color:var(--t1);border-color:var(--line-hi);background:var(--chip-bg-hi);}
+#settingsPanel{
+  position:fixed;top:56px;right:28px;z-index:12;
+  width:300px;max-width:calc(100vw - 40px);max-height:calc(100vh - 80px);overflow-y:auto;
+  background:var(--panel-bg);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:0 22px 55px -25px rgba(0,0,0,.85);
+  backdrop-filter:blur(16px);
+  padding:13px 16px 16px;
+  transition:opacity .22s var(--ease), transform .22s var(--ease);
+}
+#settingsPanel.hidden{opacity:0;pointer-events:none;transform:translateY(-8px);}
+#settingsHead{
+  display:flex;align-items:center;justify-content:space-between;
+  font-family:monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--t2);padding-bottom:12px;margin-bottom:14px;border-bottom:1px solid var(--line);
+}
+#settingsClose{
+  background:none;border:none;color:var(--t3);cursor:pointer;font-size:13px;line-height:1;
+  padding:2px 5px;border-radius:5px;transition:color var(--dur) var(--ease),background var(--dur) var(--ease);
+}
+#settingsClose:hover{color:var(--t1);background:rgba(255,255,255,.06);}
+#settingsBody{display:flex;flex-direction:column;gap:20px;}
+.aspect-row{display:flex;gap:5px;}
+.aspect-btn{
+  flex:1;padding:6px 2px;border:1px solid var(--line);border-radius:var(--radius-chip);
+  background:var(--chip-bg);color:var(--t3);
+  font-family:monospace;font-size:9px;letter-spacing:.04em;text-align:center;
+  cursor:pointer;transition:color var(--dur) var(--ease),border-color var(--dur) var(--ease),background var(--dur) var(--ease);
+}
+.aspect-btn:hover{color:var(--t1);border-color:var(--line-hi);}
+.aspect-btn.on{color:var(--t1);border-color:var(--line-hi);background:var(--chip-bg-hi);}
+.q-cap{font-family:monospace;font-size:8px;letter-spacing:.1em;color:var(--t3);opacity:.75;}
+.perf-tog{display:flex;align-items:center;justify-content:space-between;font-family:monospace;font-size:9px;letter-spacing:.06em;color:var(--t3);}
+/* 帧率读数（左下角，实测每秒帧数，验证提帧是否属实） */
+#fpsMeter{
+  position:fixed;left:16px;bottom:14px;z-index:11;
+  font-family:monospace;font-size:10px;letter-spacing:.1em;
+  color:var(--t2);background:var(--chip-bg);border:1px solid var(--line);
+  border-radius:var(--radius-chip);padding:4px 9px;
+  pointer-events:none;font-variant-numeric:tabular-nums;backdrop-filter:var(--blur);
+}
+/* 方位罗盘（右下角）：盘面随相机朝向旋转，屏幕上方=当前面朝方向；北=-Z 红色 */
+#compass{position:fixed;right:22px;bottom:58px;width:52px;height:52px;border-radius:50%;border:1px solid var(--line);background:var(--chip-bg);backdrop-filter:var(--blur);z-index:11;pointer-events:none;}
+#compassRose{position:absolute;inset:0;font-family:monospace;font-size:10px;font-weight:700;color:var(--t3);transition:transform .12s linear;}
+#compassRose b{position:absolute;}
+#compassRose .cn{top:2px;left:50%;transform:translateX(-50%);color:#e0574a;}
+#compassRose .cs{bottom:2px;left:50%;transform:translateX(-50%);}
+#compassRose .ce{right:4px;top:50%;transform:translateY(-50%);}
+#compassRose .cw{left:4px;top:50%;transform:translateY(-50%);}
+@media (max-width:560px){ #settingsPanel{right:14px;left:14px;width:auto;} }
 .pcol{display:flex;flex-direction:column;gap:10px;}
 .ptitle{
   font-family:monospace;font-size:9px;letter-spacing:.22em;text-transform:uppercase;
@@ -132,14 +185,6 @@ input[type=range].r:hover::-webkit-slider-thumb{transform:scale(1.25);box-shadow
 .tog input:checked+.togs::before{transform:translateX(12px);background:var(--blue);}
 .ratio-wrap{flex:1;height:3px;background:rgba(255,255,255,.06);border-radius:2px;position:relative;overflow:hidden;}
 #ratioBar{position:absolute;left:0;top:0;height:100%;background:linear-gradient(to right,var(--amber),var(--blue));transition:width .25s var(--ease);}
-
-/* live description */
-#liveDesc{
-  position:fixed;bottom:118px;left:50%;transform:translateX(-50%);
-  font-family:Georgia,serif;font-size:13px;font-weight:300;font-style:italic;
-  color:rgba(240,232,216,.5);letter-spacing:.04em;z-index:10;
-  pointer-events:none;text-align:center;white-space:nowrap;
-}
 .hint-btm{
   position:fixed;bottom:155px;left:50%;transform:translateX(-50%);
   font-family:monospace;font-size:9px;letter-spacing:.16em;
@@ -230,11 +275,13 @@ input[type=range].r:hover::-webkit-slider-thumb{transform:scale(1.25);box-shadow
 <div id="topBtns">
   <button class="top-btn" id="shotBtn" onclick="takeShot()">↓ 截图</button>
   <button class="top-btn" id="driftBtn" onclick="toggleDrift()">⏱ 时间轴</button>
+  <button class="top-btn" id="settingsBtn" onclick="toggleSettings()">⚙ 设置</button>
 </div>
 
 <div class="hint-btm" id="hint">拖动旋转视角 · 拖动光球移动光源 · 滚轮缩放</div>
-<div id="liveDesc"></div>
 <div id="timeDisplay"></div>
+<div id="fpsMeter">-- FPS</div>
+<div id="compass" title="方位罗盘：屏幕上方=你面朝的方向"><div id="compassRose"><b class="cn">N</b><b class="ce">E</b><b class="cs">S</b><b class="cw">W</b></div></div>
 
 <!-- 光源漂移时间轴：拖拽滑块到任意时段，或播放自动推移 -->
 <div id="timeline" class="hidden">
@@ -253,39 +300,83 @@ input[type=range].r:hover::-webkit-slider-thumb{transform:scale(1.25);box-shadow
   </div>
 </div>
 
+<!-- 收起/展开手柄：必须是 #panel 的兄弟节点(不能放进 #panel 内)——#panel 收起时用 transform:translateY(100%)，
+     transform 会成为其内 position:fixed 子元素的包含块，若手柄在里面会随面板一起滑出屏幕外 → 收起后无法再点开。 -->
+<button id="panelToggle" onclick="togglePanel()">▼ 收起面板</button>
 <div id="panel">
-<button id="panelToggle" onclick="togglePanel()">▲ 控制面板</button>
-  <!-- Key light -->
+  <!-- Key light（窗光=自然光，配合预设/时间轴，留在主面板作主要艺术控制） -->
   <div class="pcol">
     <div class="ptitle g"><div class="ldot" id="mDot" style="background:#d4a84b;box-shadow:0 0 5px rgba(212,168,75,.7)"></div>窗光 · Window Light<input type="checkbox" id="curtainOn" style="display:none"></div>
     <div class="row"><label>强度</label><input type="range" class="g" id="mInt" min="0" max="5" value="1.8" step="0.05"><span class="val" id="mIntv">1.80</span></div>
     <div class="row"><label>色温</label><input type="range" class="g" id="mTemp" min="0" max="1" value="0.65" step="0.01"><span class="val" id="mTempv">暖</span></div>
     <div class="row"><label>角度</label><input type="range" class="g" id="mAngle" min="-80" max="80" value="-35" step="1"><span class="val" id="mAnglev">-35°</span></div>
   </div>
-  <!-- Ceiling LED -->
-  <div class="pcol">
-    <div class="ptitle b">
-      <div class="ldot" id="cDot" style="background:#cfe2ff;box-shadow:0 0 5px rgba(207,226,255,.7)"></div>天花板灯 · Ceiling LED
-      <div class="tog-row"><label for="ceilOn">开启</label><label class="tog"><input type="checkbox" id="ceilOn" checked><span class="togs"></span></label></div>
-    </div>
-    <div class="row"><label>亮度</label><input type="range" class="b" id="ceilInt" min="0" max="2" value="1.8" step="0.05"><span class="val" id="ceilIntv">1.80</span></div>
-    <div class="row"><label>色温</label><input type="range" class="b" id="ceilTemp" min="0" max="1" value="0.5" step="0.01"><span class="val" id="ceilTempv">白</span></div>
+</div>
+
+<!-- 设置浮层：室内三种灯(天花板/走廊/办公室)参数从主面板移到这里，点⚙开合、Esc/×关闭 -->
+<div id="settingsPanel" class="hidden">
+  <div id="settingsHead">
+    <span>⚙ 设置 · 室内灯光</span>
+    <button id="settingsClose" onclick="toggleSettings(false)" title="关闭 (Esc)">✕</button>
   </div>
-  <!-- Corridor light -->
-  <div class="pcol">
-    <div class="ptitle b">
-      <div class="ldot" id="rDot" style="background:#eaf0ff;box-shadow:0 0 5px rgba(234,240,255,.7)"></div>走廊灯 · Corridor
-      <div class="tog-row"><label for="corrOn">开启</label><label class="tog"><input type="checkbox" id="corrOn" checked><span class="togs"></span></label></div>
+  <div id="settingsBody">
+    <!-- 画幅 Aspect ratio -->
+    <div class="pcol">
+      <div class="ptitle">🎬 画幅 · Aspect</div>
+      <div class="aspect-row">
+        <button class="aspect-btn on" data-ar="2.3333" onclick="setAspect('2.3333')">21:9</button>
+        <button class="aspect-btn" data-ar="1.7778" onclick="setAspect('1.7778')">16:9</button>
+        <button class="aspect-btn" data-ar="1.3333" onclick="setAspect('1.3333')">4:3</button>
+        <button class="aspect-btn" data-ar="full" onclick="setAspect('full')">全屏</button>
+      </div>
     </div>
-    <div class="row"><label>亮度</label><input type="range" class="b" id="corrInt" min="0" max="1.5" value="1.0" step="0.05"><span class="val" id="corrIntv">1.00</span></div>
-  </div>
-  <!-- Office light -->
-  <div class="pcol">
-    <div class="ptitle b">
-      <div class="ldot" id="oDot" style="background:#f3efe4;box-shadow:0 0 5px rgba(243,239,228,.7)"></div>办公室灯 · Office
-      <div class="tog-row"><label for="offOn">开启</label><label class="tog"><input type="checkbox" id="offOn" checked><span class="togs"></span></label></div>
+    <!-- 机位 View：一键切到各区域 -->
+    <div class="pcol">
+      <div class="ptitle">🎥 机位 · View</div>
+      <div class="aspect-row" style="flex-wrap:wrap;gap:5px">
+        <button class="aspect-btn" onclick="applyView(CAM_VIEWS['0'])">整栋外观</button>
+        <button class="aspect-btn" onclick="applyView(CAM_VIEWS['5'])">二层教室</button>
+        <button class="aspect-btn" onclick="applyView(CAM_VIEWS['8'])">办公室</button>
+        <button class="aspect-btn" onclick="applyView(CAM_VIEWS.hall)">报告厅</button>
+      </div>
     </div>
-    <div class="row"><label>亮度</label><input type="range" class="b" id="offInt" min="0" max="2" value="1.0" step="0.05"><span class="val" id="offIntv">1.00</span></div>
+    <!-- 性能 Performance：清晰度档位 + 抗锯齿 + 动态分辨率 -->
+    <div class="pcol">
+      <div class="ptitle">⚡ 性能 · Performance</div>
+      <div class="q-cap">清晰度（越高越清晰、越吃帧）</div>
+      <div class="aspect-row">
+        <button class="aspect-btn q-btn on" data-q="1.0" onclick="setQuality('1.0')">省电 1.0</button>
+        <button class="aspect-btn q-btn" data-q="1.3" onclick="setQuality('1.3')">均衡 1.3</button>
+        <button class="aspect-btn q-btn" data-q="1.75" onclick="setQuality('1.75')">高清 1.75</button>
+      </div>
+      <div class="perf-tog"><span>抗锯齿</span><label class="tog"><input type="checkbox" id="aaOn" checked onchange="setAA(this.checked)"><span class="togs"></span></label></div>
+      <div class="perf-tog"><span>动态分辨率 · 转动时降</span><label class="tog"><input type="checkbox" id="dynOn" onchange="setDynRes(this.checked)"><span class="togs"></span></label></div>
+    </div>
+    <!-- Ceiling LED -->
+    <div class="pcol">
+      <div class="ptitle b">
+        <div class="ldot" id="cDot" style="background:#cfe2ff;box-shadow:0 0 5px rgba(207,226,255,.7)"></div>天花板灯 · Ceiling LED
+        <div class="tog-row"><label for="ceilOn">开启</label><label class="tog"><input type="checkbox" id="ceilOn" checked><span class="togs"></span></label></div>
+      </div>
+      <div class="row"><label>亮度</label><input type="range" class="b" id="ceilInt" min="0" max="2" value="1.8" step="0.05"><span class="val" id="ceilIntv">1.80</span></div>
+      <div class="row"><label>色温</label><input type="range" class="b" id="ceilTemp" min="0" max="1" value="0.5" step="0.01"><span class="val" id="ceilTempv">白</span></div>
+    </div>
+    <!-- Corridor light -->
+    <div class="pcol">
+      <div class="ptitle b">
+        <div class="ldot" id="rDot" style="background:#eaf0ff;box-shadow:0 0 5px rgba(234,240,255,.7)"></div>走廊灯 · Corridor
+        <div class="tog-row"><label for="corrOn">开启</label><label class="tog"><input type="checkbox" id="corrOn" checked><span class="togs"></span></label></div>
+      </div>
+      <div class="row"><label>亮度</label><input type="range" class="b" id="corrInt" min="0" max="1.5" value="1.0" step="0.05"><span class="val" id="corrIntv">1.00</span></div>
+    </div>
+    <!-- Office light -->
+    <div class="pcol">
+      <div class="ptitle b">
+        <div class="ldot" id="oDot" style="background:#f3efe4;box-shadow:0 0 5px rgba(243,239,228,.7)"></div>办公室灯 · Office
+        <div class="tog-row"><label for="offOn">开启</label><label class="tog"><input type="checkbox" id="offOn" checked><span class="togs"></span></label></div>
+      </div>
+      <div class="row"><label>亮度</label><input type="range" class="b" id="offInt" min="0" max="2" value="1.0" step="0.05"><span class="val" id="offIntv">1.00</span></div>
+    </div>
   </div>
 </div>
 
@@ -4586,13 +4677,46 @@ void main() {
 // 显式开启（r164 默认即 true）；白天视角因此会更暗，属预期，Task 6 重新平衡曝光/灯光。
 // 现在锁定色彩管线，避免 Task 3-4 的面光/反弹调参在 Task 6 翻转 CM 时全部失效。
 THREE.ColorManagement.enabled = true;
-const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true,powerPreference:'high-performance'}); // 提帧②：双显卡机器优先选独显（画面不变）
+// 提帧③：antialias 关闭——最终画面由 EffectComposer 的 OutputPass 把一张离屏后处理贴图铺满 canvas，
+// canvas 原生 MSAA 只对"写入默认帧缓冲的几何边缘"生效，而这里写入的是一张全屏矩形(边缘在屏幕外)，
+// 场景边缘早已在离屏 HalfFloat 目标里栅格化完成、不受 canvas MSAA 影响 → 开着是纯浪费，关闭画面零变化。
+// preserveDrawingBuffer 保留：截图按钮(takeShot→buildShotCanvas)需回读 canvas 像素。
+const renderer=new THREE.WebGLRenderer({antialias:false,preserveDrawingBuffer:true,powerPreference:'high-performance'}); // 提帧②：双显卡机器优先选独显（画面不变）
 // 超采样抗锯齿(SSAA)：>1 时以更高分辨率渲染再缩回，转动视角时边缘/高光闪烁明显减弱。
 // 若觉得掉帧/发烫，把 SUPERSAMPLE 调回 1.0；想更干净可调到 2.0（更吃显卡）。
 const SUPERSAMPLE = 1.0;
 const pixelRatioCap = ()=> Math.min(devicePixelRatio * SUPERSAMPLE, 1.75); // 提帧：Retina 上限 2→1.75(像素数≈−23%)；想更锐改回 2
-renderer.setSize(innerWidth,innerHeight);
-renderer.setPixelRatio(pixelRatioCap());
+// 控制面板展开时，画面收缩到面板上方，避免底部教室被面板遮住看不到。
+let panelOpen = true;
+function viewSize(){
+  const p = document.getElementById('panel');
+  const ph = (panelOpen && p) ? p.offsetHeight : 0;   // offsetHeight 不受 translateY 收起动画影响
+  return { w: innerWidth, h: Math.max(1, innerHeight - ph) };
+}
+// 画幅：把渲染矩形约束成所选比例(16:9 默认 / 2.35 / 21:9 / 4:3)，在可用区内居中，
+// 四周露出的黑色 body 即上下(letterbox)或左右(pillarbox)黑边。
+let frameAspect = 21/9;   // 默认画幅 21:9（可切 16:9 / 4:3）
+function frameRect(){
+  const av = viewSize();
+  if(!frameAspect){ return { w: av.w, h: av.h, left: 0, top: 0 }; } // 0=全屏：铺满可用区(无黑边)
+  let w, h;
+  if (av.w / av.h > frameAspect){ h = av.h; w = Math.round(h * frameAspect); } // 可用区更宽→上下黑边
+  else { w = av.w; h = Math.round(w / frameAspect); }                            // 可用区更高→左右黑边
+  const left = Math.round((av.w - w) / 2);
+  const top  = Math.round((av.h - h) / 2);   // 仅在面板上方的可用区内垂直居中
+  return { w, h, left, top };
+}
+{ const r=frameRect(); renderer.setSize(r.w, r.h); }
+// ── 渲染清晰度 / 动态分辨率 状态（⚙设置面板控制；curRes = 当前实际 pixelRatio）──
+let resStill = 1.0;          // 静止(档位)分辨率：省电1.0 / 均衡1.3 / 高清1.75，默认省电
+let dynResEnabled = false;   // 动态分辨率：转动/移动时临时降到 RES_MOVING
+const RES_MOVING = 1.0;      // 运动时分辨率
+let curRes = resStill;       // 当前实际渲染倍率（动态时每帧平滑趋近）
+let _appliedRes = -1;        // 上次真正 setSize 采用的倍率
+let _lastInteract = -1e9;    // 最后一次交互(拖动/滚轮/按键)时间戳
+// canvas(renderer)固定在此分辨率——动态/切档位只改 composer 离屏，canvas 显存不重建=不闪。
+const CANVAS_PR = Math.min(devicePixelRatio || 1, 1.75);
+renderer.setPixelRatio(CANVAS_PR);
 renderer.useLegacyLights = false;                // Task6: 切换到物理正确灯光(光强单位=瓦特/坎德拉)；point/spot 需 ×π 补偿
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
@@ -4642,7 +4766,7 @@ const camera=new THREE.PerspectiveCamera(52,innerWidth/innerHeight,0.3,80); // n
 const composer = new THREE.EffectComposer(renderer, new THREE.WebGLRenderTarget(
   innerWidth, innerHeight, { type: THREE.HalfFloatType }
 ));
-composer.setPixelRatio(renderer.getPixelRatio());
+composer.setPixelRatio(curRes);   // 离屏渲染分辨率(可低于 canvas)；随后 layoutViewport 按档位重设
 composer.setSize(innerWidth, innerHeight);
 const renderPass = new THREE.RenderPass(scene, camera);
 const outputPass = new THREE.OutputPass();
@@ -4652,7 +4776,7 @@ composer.addPass(outputPass);
 // 性能：GTAO 以半分辨率计算 AO，再由 blendMaterial 经 UV 双线性上采样合成到全分辨率画面，
 // AO 是低频遮蔽信号，半分辨率几乎不可见劣化，却把 AO/降噪每像素开销降到 1/4。
 const GTAO_SCALE = 0.5;
-const gtaoSize = ()=> ({ w: Math.max(1, Math.round(innerWidth*GTAO_SCALE)), h: Math.max(1, Math.round(innerHeight*GTAO_SCALE)) });
+const gtaoSize = ()=> { const {w,h}=frameRect(); return { w: Math.max(1, Math.round(w*GTAO_SCALE)), h: Math.max(1, Math.round(h*GTAO_SCALE)) }; };
 const gtaoPass = (()=>{ const s=gtaoSize(); return new THREE.GTAOPass(scene, camera, s.w, s.h); })();
 const gtaoParams = {
   radius: 0.35, distanceExponent: 1.0, thickness: 1.0, scale: 1.0,
@@ -4700,7 +4824,7 @@ function applyMove(dt){
   let dy=0;
   if(moveKeys.q) dy-=1;
   if(moveKeys.e) dy+=1;
-  if(dy) panY=Math.max(-1.2, Math.min(2.2, panY + dy*speed));
+  if(dy) panY=Math.max(-1.2, Math.min(9.0, panY + dy*speed)); // 上限 2.2→9.0：容纳二层教室/俯瞰
   updateCam();
 }
 
@@ -4875,6 +4999,23 @@ function addContactShadow(x,z,w,d,rot=0){
 
 // ── ROOM STRUCTURE ────────────────────────────────────────────────────────────
 const RW=14, RD=22, RH=3.5; // room width, depth, height（真实教室层高；墙体/吊顶/灯具/遮光体均由 RH 联动）
+
+// ── L 形双层楼 楼层体系（改造：单层单教室 → L 形双层）──────────────────────────
+// 一层 Y[0,RH]、楼板 Y[RH,RH+SLAB_T]、二层 Y[FLOOR_LIFT, FLOOR_LIFT+RH]。教室套整体抬 FLOOR_LIFT 到二层。
+const SLAB_T = 0.35;               // 层间楼板厚
+const FLOOR_LIFT = RH + SLAB_T;    // 二层抬升量 = 3.85
+const L1_Y0=0, L1_Y1=RH, L2_Y0=FLOOR_LIFT, L2_Y1=FLOOR_LIFT+RH; // 一层/二层 Y 区间
+// 两翼地脚印(XZ)——草案值，阶段1建壳时按现有教室套实际包围盒校准
+const WA_X0=-7, WA_X1=9,   WA_Z0=-16, WA_Z1=25;  // 横翼A(教室+走廊+办公室长条)
+const WB_X0=-23, WB_X1=-7, WB_Z0=-22, WB_Z1=-4;  // 竖翼B(报告厅)：北移避开教室西窗(世界z≈0/4/8)；南面(WB_Z1)开玻璃大门
+// 毛坯外壳材质(中性混凝土灰)
+const shellMat = new THREE.MeshStandardMaterial({ color:0x9a968e, roughness:0.95, metalness:0.0 });
+// 造一块外壳盒/板：中心(cx,cy,cz) + 尺寸(w,h,d)；默认投/受阴影，直接加入场景
+function shellBox(cx,cy,cz,w,h,d,material=shellMat){
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), material);
+  m.position.set(cx,cy,cz); m.castShadow=true; m.receiveShadow=true; scene.add(m);
+  return m;
+}
 
 // Floor
 const floor=new THREE.Mesh(new THREE.PlaneGeometry(RW,RD),mat(0xaaa69b,0.50,0.02,floorTex,floorNormal,floorRough)); // 0xd5cfc2→0xaaa69b(×0.8)：地砖反照率再下调，让强阳光照亮区也保留砖缝、不冲成"死白"(真机偏亮，原 0.81 在阳光下爆白)；可运行时按 - / = 微调
@@ -8057,6 +8198,94 @@ function updateSunOrb(){
 }
 updateSunOrb();
 
+// ══ 教室套抬到二层（阶段2）══════════════════════════════════════════════════════
+// 把 scene 顶层里除"全局光源/光球控件"外的所有对象一次性 reparent 进 wingAUpper 组并整体抬升，
+// 避免逐个改 110+ 处 scene.add。全局白名单只留真正不随楼层的项；其余(教室/走廊/办公室/家具/
+// 窗外天空/补光/尘埃/光柱)全部随组升到二层。
+const wingAUpper = new THREE.Group();
+{
+  const KEEP = new Set([ambientLight, hemiLight, mainLight, mainLight.target, moonLight, moonLight.target, sunOrb]);
+  for(const o of [...scene.children]){ if(!KEEP.has(o)) wingAUpper.add(o); }
+  wingAUpper.position.y = FLOOR_LIFT;   // 整组升到二层
+  scene.add(wingAUpper);
+  renderer.shadowMap.needsUpdate = true; // 教室位置变了，触发一次阴影重渲(范围校正见后续任务)
+}
+
+// ══ 阶段1：横翼A 双层楼板/一层地面/屋顶 ═══════════════════════════════════════════
+// 教室已在二层(Y=FLOOR_LIFT)，给它垫层间楼板、补一层地面与屋顶，让"双层"结构立起来。
+{
+  const cx=(WA_X0+WA_X1)/2, cz=(WA_Z0+WA_Z1)/2, W=WA_X1-WA_X0, D=WA_Z1-WA_Z0;
+  shellBox(cx, -0.15,        cz, W, 0.30,   D); // 一层地面(顶面 Y=0)
+  shellBox(cx, (RH + FLOOR_LIFT-0.03)/2, cz, W, (FLOOR_LIFT-0.03)-RH, D); // 层间楼板(顶面 3.82，比二层地板 3.85 低 3cm，防 z-fighting 闪烁)
+  shellBox(cx, L2_Y1+0.25,   cz, W, 0.30,   D); // 屋顶(底面 7.45，比二层吊顶 7.35 高 10cm，防天花板 z-fighting 闪烁)
+}
+
+// ══ 阶段1：竖翼B 双层外壳（一层将放报告厅、二层毛坯）——从横翼A黑板前端沿 -X 伸出 ══
+{
+  const cx=(WB_X0+WB_X1)/2, cz=(WB_Z0+WB_Z1)/2, W=WB_X1-WB_X0, D=WB_Z1-WB_Z0;
+  const H=L2_Y1;                               // 双层通高外墙
+  shellBox(cx, -0.15,        cz, W, 0.30,   D); // 一层地面
+  shellBox(cx, RH+SLAB_T/2,  cz, W, SLAB_T, D); // 层间楼板
+  shellBox(cx, L2_Y1+0.15,   cz, W, 0.30,   D); // 屋顶
+  shellBox(WB_X0, H/2, cz, 0.30, H, D);         // 西外墙(x=WB_X0)
+  shellBox(cx, H/2, WB_Z0, W, H, 0.30);         // 北外墙(z=WB_Z0=-22)
+  // 南面(z=WB_Z1=-4)不建实墙 → 留给报告厅商场式玻璃大门(见报告厅内部)
+  // 东侧(x=WB_X1=-7)与横翼A相接处不建墙 → 两翼内部连通(报告厅门/连通口见阶段3)
+}
+
+// ══ 阶段3+4+5：报告厅内部(竖翼B一层) —— 舞台/LED 朝西、阶梯座椅带扶手、南面商场式玻璃大门 ══
+{
+  const hcz = (WB_Z0+WB_Z1)/2;   // 报告厅中心 z = -13
+  const ceilY = RH - 0.15;
+  // 顶部照明：6 灯板 + 4 点光
+  const panelMat = new THREE.MeshStandardMaterial({ color:0xf6f8ff, emissive:0xeaf0ff, emissiveIntensity:0.9, roughness:0.4 });
+  for(const lx of [-19,-11]) for(const lz of [-19,-13,-7]){
+    const p=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.12,1.4),panelMat); p.position.set(lx,ceilY,lz); scene.add(p);
+  }
+  for(const lx of [-19,-11]) for(const lz of [-17,-9]){
+    const pl=new THREE.PointLight(0xf3f6ff,1.0,15,2); pl.position.set(lx,ceilY-0.3,lz); pl.castShadow=false; scene.add(pl);
+  }
+  // 舞台(西端，抬高) + LED 大屏(西墙内侧朝东，与舞台相当) + 讲台(移到舞台北侧)
+  shellBox(-21, 0.20, hcz, 4, 0.40, 16, new THREE.MeshStandardMaterial({color:0x5b4a38,roughness:0.85}));
+  const led=new THREE.Mesh(new THREE.BoxGeometry(0.15,3.3,14), new THREE.MeshStandardMaterial({color:0x10182c,emissive:0x2b52a0,emissiveIntensity:0.85,roughness:0.25}));
+  led.position.set(-22.7, 2.15, hcz); scene.add(led);
+  const pod=new THREE.Mesh(new THREE.BoxGeometry(0.6,1.1,1.3), new THREE.MeshStandardMaterial({color:0x8a6a44,roughness:0.55,metalness:0.1}));
+  pod.position.set(-20.4, 0.95, -20.0); pod.castShadow=true; scene.add(pod);
+  // 阶梯座椅(东侧朝西看舞台；后排东、高，前排西、低) —— InstancedMesh 合批(座/靠背/扶手)
+  const seatMat=new THREE.MeshStandardMaterial({color:0x33415a,roughness:0.7});
+  const stepMat=new THREE.MeshStandardMaterial({color:0x8b8880,roughness:0.9});
+  const seatGeo=new THREE.BoxGeometry(0.5,0.12,0.5), backGeo=new THREE.BoxGeometry(0.1,0.5,0.5), armGeo=new THREE.BoxGeometry(0.42,0.26,0.08);
+  const rowsX=[], colsZ=[];
+  for(let x=-18; x<=-8.999; x+=1.15) rowsX.push(x);              // 排(沿x)更密
+  for(let z=-20; z<=-5.999; z+=1.05){ if(Math.abs(z-hcz)<0.65) continue; colsZ.push(z); } // 列(沿z)更密，中央过道
+  const N=rowsX.length*colsZ.length;
+  const seatI=new THREE.InstancedMesh(seatGeo,seatMat,N), backI=new THREE.InstancedMesh(backGeo,seatMat,N), armI=new THREE.InstancedMesh(armGeo,seatMat,N*2);
+  seatI.castShadow=backI.castShadow=armI.castShadow=false;      // 室内(太阳照不进)不投影 → 省阴影渲染
+  const M=new THREE.Matrix4(); let i=0, a=0;
+  const y=0.45;                                                  // 平地(暂不做阶梯台阶)
+  rowsX.forEach((x)=>{
+    for(const z of colsZ){
+      M.makeTranslation(x, y, z);           seatI.setMatrixAt(i,M);
+      M.makeTranslation(x+0.25, y+0.28, z); backI.setMatrixAt(i,M);  // 靠背在东侧(背后)，人朝西
+      M.makeTranslation(x, y+0.14, z-0.27); armI.setMatrixAt(a++,M); // 扶手×2
+      M.makeTranslation(x, y+0.14, z+0.27); armI.setMatrixAt(a++,M);
+      i++;
+    }
+  });
+  seatI.instanceMatrix.needsUpdate=backI.instanceMatrix.needsUpdate=armI.instanceMatrix.needsUpdate=true;
+  scene.add(seatI); scene.add(backI); scene.add(armI);
+  // 南面(z=WB_Z1)商场式玻璃大门：4 扇玻璃 + 竖框 + 门楣
+  const glassMat=new THREE.MeshStandardMaterial({color:0xbcd8f0,transparent:true,opacity:0.30,roughness:0.08,emissive:0x1a2a3a,emissiveIntensity:0.05});
+  const frameMat=new THREE.MeshStandardMaterial({color:0x2a2f36,roughness:0.5,metalness:0.6});
+  const doorH=2.7, dz=WB_Z1;
+  for(let x=-21; x<=-11.999; x+=3.0){
+    const g=new THREE.Mesh(new THREE.BoxGeometry(2.7,doorH,0.08),glassMat); g.position.set(x, doorH/2, dz); scene.add(g);
+    const fr=new THREE.Mesh(new THREE.BoxGeometry(0.14,doorH,0.12),frameMat); fr.position.set(x-1.45, doorH/2, dz); scene.add(fr);
+  }
+  { const fr=new THREE.Mesh(new THREE.BoxGeometry(0.14,doorH,0.12),frameMat); fr.position.set(-10.55, doorH/2, dz); scene.add(fr); } // 最东竖框
+  { const top=new THREE.Mesh(new THREE.BoxGeometry(12.2,0.18,0.14),frameMat); top.position.set(-15.5, doorH+0.09, dz); scene.add(top); } // 门楣
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function tempToColor(t){
   const c=new THREE.Color();
@@ -8074,20 +8303,12 @@ function tempToColorLED(t){
 }
 function tempLabel(t){return t<0.25?'冷':t<0.4?'蓝':t<0.6?'白':t<0.75?'暖':'烛';}
 
-// ── Live description ──────────────────────────────────────────────────────────
-function describeLighting(){
-  const angle=+document.getElementById('mAngle').value;
-  const temp=+document.getElementById('mTemp').value;
-  const ceilOn=document.getElementById('ceilOn').checked;
-
-  let dir=angle<-50?'清晨斜光':angle<-20?'上午侧光':angle<20?'正午顶光':angle<50?'下午斜光':'傍晚夕光';
-  let mood=temp<0.35?'冷蓝':temp<0.55?'自然白':temp<0.72?'暖黄':'夕橙';
-  let fd=ceilOn?'灯光开启':'仅自然光';
-  document.getElementById('liveDesc').textContent=`${dir} · ${mood}色温 · ${fd}`;
-}
-
 // ── Sync ──────────────────────────────────────────────────────────────────────
 let driftOn=false,driftT=0,driftTrans=0,driftSunElev=0.04;
+// 提帧②：把 animate 循环内每帧多次读写的三个滑块元素引用缓存一次，省掉逐帧 getElementById 查询(不影响画面)。
+const elAngle = document.getElementById('mAngle');
+const elTemp  = document.getElementById('mTemp');
+const elInt   = document.getElementById('mInt');
 let curtainAmt=0; // 窗帘拉合量 0(开)…1(合)，render loop 平滑驱动并联动遮光动画
 let driftPlaying=false; // 时间轴是否自动推移（播放）；为 false 时停在当前 driftT（可拖拽scrub）
 let driftSpeed=1;       // 时间轴播放速度倍率（0.25 / 0.5 / 1 / 1.5 / 2 倍）
@@ -8146,9 +8367,9 @@ function sync(){
   updateWindowPatches(angle, driftSunElev);
 
   syncCeiling();
-  describeLighting();
 }
-document.querySelectorAll('#panel input').forEach(el=>el.addEventListener('input',()=>{sync();markCustom();}));
+// 含 #settingsPanel：天花板灯亮度/色温滑块已移入设置浮层，同样要触发 sync()
+document.querySelectorAll('#panel input, #settingsPanel input').forEach(el=>el.addEventListener('input',()=>{sync();markCustom();}));
 document.getElementById('ceilOn').addEventListener('change',()=>{sync();markCustom();});
 document.getElementById('corrOn').addEventListener('change',()=>{syncCorridor();markCustom();});
 document.getElementById('corrInt').addEventListener('input',()=>{syncCorridor();markCustom();});
@@ -8222,7 +8443,6 @@ function applyPreset(k){
   // 静态预设的夜间月光：仅 night 点亮冷蓝月光，其余日间预设熄灭
   moonTarget = k==='night' ? 0.28 : 0.0;
   sync();
-  describeLighting();
   document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('on'));
   document.querySelector(`[onclick="applyPreset('${k}')"]`).classList.add('on');
   descEl.textContent=p.desc;descEl.style.opacity='1';
@@ -8330,7 +8550,7 @@ const raycaster=new THREE.Raycaster();
 const dragPlane=new THREE.Plane();
 const dragTarget=new THREE.Vector3();
 let dragMk=null,orbiting=false,lastX=0,lastY=0;
-function ndc(e){return new THREE.Vector2((e.clientX/innerWidth)*2-1,-(e.clientY/innerHeight)*2+1);}
+function ndc(e){const {w,h,left,top}=frameRect();return new THREE.Vector2(((e.clientX-left)/w)*2-1,-((e.clientY-top)/h)*2+1);} // 扣除画幅黑边偏移，拾取/拖光坐标才准
 
 renderer.domElement.addEventListener('mousedown',e=>{
   lastX=e.clientX;lastY=e.clientY;
@@ -8370,15 +8590,27 @@ renderer.domElement.addEventListener('touchmove',e=>{
   ltx=e.touches[0].clientX;lty=e.touches[0].clientY;updateCam();
 },{passive:false});
 
-window.addEventListener('resize',()=>{
-  camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth,innerHeight);
-  renderer.setPixelRatio(pixelRatioCap()); // 跟随 SUPERSAMPLE 超采样设置
-  composer.setSize(innerWidth,innerHeight);
-  composer.setPixelRatio(renderer.getPixelRatio());
+// 把整条渲染管线(相机/WebGL/合成器/GTAO/辉光/颗粒)统一约束到「面板上方」的可视区域，
+// 三层画布(主画面 z0 / bloom z4 / grain z5)尺寸一致对齐，面板展开时画面整体上移不被遮挡。
+function layoutViewport(){
+  const {w,h,left,top}=frameRect();
+  camera.aspect=w/h;camera.updateProjectionMatrix();
+  renderer.setPixelRatio(CANVAS_PR); // canvas 固定高分辨率(不随清晰度/动态变→不闪)
+  renderer.setSize(w,h);
+  renderer.domElement.style.left = left+'px'; // 画幅居中：主画布按黑边偏移定位
+  renderer.domElement.style.top  = top+'px';
+  composer.setPixelRatio(curRes);    // 离屏渲染分辨率=清晰度/动态(scene 在此跑，省 fill-rate)
+  composer.setSize(w,h);
   { const s=gtaoSize(); gtaoPass.setSize(s.w,s.h); } // GTAO 保持半分辨率
-
-});
+  // 叠层画布(bloom/grain)：drawing buffer + CSS 尺寸/偏移都跟随画幅矩形，三层严格对齐
+  if(typeof resizeBloom==='function') resizeBloom();
+  if(typeof resizeGrain==='function') resizeGrain();
+  for(const cv of [bloomCv, grainCv]){
+    cv.style.left=left+'px'; cv.style.top=top+'px';
+    cv.style.width=w+'px';   cv.style.height=h+'px';
+  }
+}
+window.addEventListener('resize', layoutViewport);
 
 // ── Film Grain ────────────────────────────────────────────────────────────────
 // Direct RGBA pixel approach — no blend modes, works everywhere.
@@ -8390,11 +8622,11 @@ const grainCtx = grainCv.getContext('2d');
 const GRAIN_SCALE = 0.45; // low-res source, upscaled with smoothing for film look
 
 function resizeGrain(){
-  grainCv.width  = Math.floor(innerWidth  * GRAIN_SCALE);
-  grainCv.height = Math.floor(innerHeight * GRAIN_SCALE);
+  const {w,h}=frameRect();
+  grainCv.width  = Math.floor(w * GRAIN_SCALE);
+  grainCv.height = Math.floor(h * GRAIN_SCALE);
 }
 resizeGrain();
-window.addEventListener('resize', resizeGrain);
 
 // ── Bloom 辉光叠层（廉价 2D 实现：亮部阈值 + 模糊，screen 混合）─────────────────
 // 不动 WebGL 管线：把渲染好的帧取出，用 canvas filter 做"高对比压暗→只留亮处 + 模糊"，
@@ -8403,11 +8635,47 @@ const bloomCv  = document.getElementById('bloomCanvas');
 const bloomCtx = bloomCv.getContext('2d');
 const BLOOM_SCALE = 0.42;
 function resizeBloom(){
-  bloomCv.width  = Math.max(2, Math.floor(innerWidth  * BLOOM_SCALE));
-  bloomCv.height = Math.max(2, Math.floor(innerHeight * BLOOM_SCALE));
+  const {w,h}=frameRect();
+  bloomCv.width  = Math.max(2, Math.floor(w * BLOOM_SCALE));
+  bloomCv.height = Math.max(2, Math.floor(h * BLOOM_SCALE));
 }
 resizeBloom();
-window.addEventListener('resize', resizeBloom);
+// 面板启动即展开：初次布局把画面收缩到面板上方(叠层 CSS 高度一并对齐)
+layoutViewport();
+
+// ── 渲染清晰度 / 抗锯齿(MSAA) / 动态分辨率 控制 ──────────────────────────────
+// 渲染缩放：只改 composer 离屏渲染分辨率(scene/GTAO/后处理在此跑)，renderer/canvas 恒定不动
+// → 动态降/升、切清晰度档位都不重建 canvas 显存 = 不闪。OutputPass 把离屏结果拉伸填满固定 canvas。
+function applyRenderScale(){
+  const {w,h}=frameRect();
+  composer.setPixelRatio(curRes); composer.setSize(w,h);
+  const s=gtaoSize(); gtaoPass.setSize(s.w,s.h); // GTAO 保持半分辨率
+  _appliedRes = curRes;
+}
+// 清晰度档位：设定静止分辨率并立即应用
+function setQuality(v){
+  resStill = parseFloat(v);
+  document.querySelectorAll('.q-btn').forEach(b=>b.classList.toggle('on', b.dataset.q===v));
+  curRes = resStill; applyRenderScale();
+}
+// 抗锯齿：给 composer 两个离屏目标开/关 MSAA(4x)，dispose 触发按新 samples 重建
+function setAA(on){
+  const s = on ? 4 : 0;
+  for(const rt of [composer.renderTarget1, composer.renderTarget2]){
+    if(rt && rt.samples!==s){ rt.samples=s; rt.dispose(); }
+  }
+}
+// 动态分辨率开关：关掉时立刻回到档位分辨率
+function setDynRes(on){ dynResEnabled=!!on; if(!dynResEnabled){ curRes=resStill; applyRenderScale(); } }
+// 交互(拖动/滚轮/键盘/触摸)打时间戳 → animate 据此判断"运动中"
+const _markInteract = ()=>{ _lastInteract = performance.now(); };
+addEventListener('pointerdown', _markInteract, true);
+addEventListener('pointermove', e=>{ if(e.buttons) _markInteract(); }, true);
+addEventListener('wheel', _markInteract, {capture:true, passive:true});
+addEventListener('touchmove', _markInteract, {capture:true, passive:true});
+addEventListener('keydown', _markInteract, true);
+setAA(document.getElementById('aaOn').checked); // 初始应用抗锯齿(默认开)
+
 let bloomStrength = 0.45;   // 0.9→0.45：辉光减半，去掉亮窗周围那层发白光晕（可调 0..1）
 function drawBloom(){
   const bw = bloomCv.width, bh = bloomCv.height;
@@ -8459,6 +8727,10 @@ const pbrMats = [];
 // 无需 EffectComposer。室内立体感改由方向光阴影 + 接触阴影 + 各向补光自然呈现。
 
 let __prevT = 0;   // 上一帧时间戳，用于 delta-time：让漂移速度与帧率无关 → 更流畅
+// 帧率统计：用真实墙钟时间(performance.now)累计，每 500ms 刷新一次左下角读数
+const fpsEl = document.getElementById('fpsMeter');
+const compassRose = document.getElementById('compassRose'); // 方位罗盘盘面(随 theta 旋转)
+let __fpsFrames = 0, __fpsLast = performance.now();
 (function animate(){
   requestAnimationFrame(animate);
   const t=clock.getElapsedTime();
@@ -8514,15 +8786,15 @@ if(driftOn){
   // slider 缓动写回
   const ease = driftTrans * driftTrans * (3 - 2 * driftTrans);
   const lerpSpeed = ease * 0.12;
-  const curA = +document.getElementById('mAngle').value;
-  const curT = +document.getElementById('mTemp').value;
-  const curI = +document.getElementById('mInt').value;
-  document.getElementById('mAngle').value = (curA + (sunAngle   - curA) * lerpSpeed).toFixed(2);
-  document.getElementById('mTemp').value  = (curT + (targetTemp - curT) * lerpSpeed).toFixed(3);
+  const curA = +elAngle.value;
+  const curT = +elTemp.value;
+  const curI = +elInt.value;
+  elAngle.value = (curA + (sunAngle   - curA) * lerpSpeed).toFixed(2);
+  elTemp.value  = (curT + (targetTemp - curT) * lerpSpeed).toFixed(3);
   // 太阳直射强度按白昼包络 dayLit 封顶：日落时(dayLit→0)随太阳曲线干净归零，消除滞后残留——
   // 否则慢速 lerp 会在太阳已"瞬移到地平线"后还残留强度，把暖橙光束打到右墙上。
   const sunCeil = dayLit * 5;
-  document.getElementById('mInt').value   = Math.max(0, Math.min(5, sunCeil,
+  elInt.value   = Math.max(0, Math.min(5, sunCeil,
       curI + (targetIntensity - curI) * lerpSpeed)).toFixed(3);
 
   // 光源位置：白天沿窗墙(z)东升西落，仰角低→高→低；夜间沿同一圆轨连续沉入地平线以下(y<0)
@@ -8672,7 +8944,7 @@ if(driftOn){
   // "没光源仍发灰"的根因：scene.environment(IBL) 给所有 PBR 材质漫射补光 + AmbientLight/
   // HemisphereLight 有非零地板。这里按总光量(窗光+灯光+月光)统一把 IBL/环境光/天光缩到 0：
   // 光越少越黑，全暗时真正全黑；只要有一点光(litTotal≥~0.4)就恢复正常质感，不影响有光时观感。
-  const _winI  = +document.getElementById('mInt').value;
+  const _winI  = +elInt.value;
   const _ceilI = document.getElementById('ceilOn').checked ? +document.getElementById('ceilInt').value : 0;
   // 仅"日光/灯光"驱动 env IBL（室内白昼漫反弹）；月光不计入 → 夜晚 IBL/环境光真正归零、场景压暗。
   // 夜间的冷蓝可见度由独立的 moonLight(方向光) 提供，而非这张白昼灰环境贴图。
@@ -8782,7 +9054,7 @@ if(driftOn){
 
   // ── Dappled light animation — breeze effect ───────────────────────────────
   // Each patch drifts slightly and breathes in opacity to simulate leaves moving
-  const mIntCur = +document.getElementById('mInt').value;
+  const mIntCur = +elInt.value;
   const dappleBase = Math.min(1.0, mIntCur / 2.6); // scale with main light intensity (Task6: ref→2.6)
   dappleMeshes.forEach(({ mesh, mat: dm, baseX, baseZ, phase, speedX, speedZ, isWall }) => {
     const wind = Math.sin(t * 0.38 + phase) * 0.5 + Math.sin(t * 0.91 + phase * 1.7) * 0.25;
@@ -8799,7 +9071,14 @@ if(driftOn){
 
   // 提帧①：太阳移动检测 → 仅当太阳位置/朝向变化才重画 4096² 阴影贴图
   // （一处覆盖 sync 滑块 / 时间轴播放 / 拖拽光标 / preset 所有来源；纯转相机时阴影不重算）
-  if(!_lastSunP.equals(mainLight.position) || !_lastSunT.equals(mainLight.target.position)){
+  // 阈值化：漂移动画每帧让太阳位置产生极微小(浮点级)变化，精确 equals() 几乎永远为"变了"，
+  // 导致阴影其实每帧全量重绘、按需刷新形同虚设。改成"累计移动超过阈值才判脏"：
+  // 阈值 0.02 世界单位 → 光源距目标~100 单位时朝向变化<0.01°，阴影位移<3mm，肉眼不可见，
+  // 但把漂移播放时的阴影重绘频率降到原来的若干分之一。(NaN 初值为首帧强制渲染的哨兵)
+  const SHADOW_DIRTY_EPS = 0.02;
+  if(Number.isNaN(_lastSunP.x) ||
+     mainLight.position.distanceTo(_lastSunP) > SHADOW_DIRTY_EPS ||
+     mainLight.target.position.distanceTo(_lastSunT) > SHADOW_DIRTY_EPS){
     renderer.shadowMap.needsUpdate = true;
     _lastSunP.copy(mainLight.position); _lastSunT.copy(mainLight.target.position);
   }
@@ -8828,17 +9107,56 @@ if(driftOn){
   updateSunBeams(); // 体积阳光光束：柱状 billboard 朝相机 + 低太阳才显著
   grainFrame = (grainFrame + 1) % 3;
   if(grainFrame === 0) drawGrain();
+
+  // ── 动态分辨率：运动中降到 RES_MOVING，松手静止后升回档位分辨率 ──
+  // 只在"目标档位真正切换"的那一刻 setSize 一次(降1次+升1次)；
+  // 绝不每帧 setSize——否则每帧重建离屏目标(叠加 MSAA)会导致画面连续闪烁。
+  if(dynResEnabled){
+    const _n = performance.now();
+    const moving = (_n - _lastInteract < 180) || driftPlaying;
+    const target = moving ? Math.min(resStill, RES_MOVING) : resStill;
+    if(Math.abs(target - curRes) > 0.001){ curRes = target; applyRenderScale(); }
+  }
+
+  // 方位罗盘：盘面旋转 = 相机 theta（屏幕上方=面朝方向；北=-Z 在 theta=0 时朝上）
+  if(compassRose) compassRose.style.transform = 'rotate('+(theta*180/Math.PI).toFixed(1)+'deg)';
+
+  // ── 帧率读数刷新（每 0.5 秒取一次平均值，数值稳定不跳；附当前渲染倍率） ──
+  __fpsFrames++;
+  const __fnow = performance.now();
+  if(__fnow - __fpsLast >= 500){
+    fpsEl.textContent = Math.round(__fpsFrames * 1000 / (__fnow - __fpsLast)) + ' FPS · ' + curRes.toFixed(2) + 'x';
+    __fpsFrames = 0; __fpsLast = __fnow;
+  }
 })();
 
 // ── Panel collapse ────────────────────────────────────────────────────────────
-let panelOpen = true;
+// panelOpen 已在渲染器初始化处声明(供 viewSize/layoutViewport 提前使用)
 function togglePanel(){
   panelOpen = !panelOpen;
   document.getElementById('panel').classList.toggle('collapsed', !panelOpen);
-  document.getElementById('panelToggle').textContent = panelOpen ? '▲ 控制面板' : '▼ 控制面板';
+  // 展开时显示"▼ 收起面板"(点它收下去)，收起时显示"▲ 控制面板"(点它拉上来)——手柄常驻屏幕底部中央可反复开合。
+  document.getElementById('panelToggle').textContent = panelOpen ? '▼ 收起面板' : '▲ 控制面板';
+  layoutViewport(); // 收起/展开时把画面重新收缩或铺满，避免面板遮挡
+}
+
+// ── 设置浮层开合（室内灯参数）：⚙按钮点开、× 或 Esc 关闭。浮层不改变渲染视口尺寸。 ──
+let settingsOpen = false;
+function toggleSettings(force){
+  settingsOpen = (force===undefined) ? !settingsOpen : !!force;
+  document.getElementById('settingsPanel').classList.toggle('hidden', !settingsOpen);
+  document.getElementById('settingsBtn').classList.toggle('on', settingsOpen);
+}
+
+// ── 画幅切换：选 2.35 / 21:9 / 16:9 / 4:3，改变 frameAspect 后重排渲染视口(四周黑边) ──
+function setAspect(v){
+  frameAspect = (v==='full') ? 0 : parseFloat(v);   // 'full'=全屏铺满(frameAspect=0)
+  document.querySelectorAll('.aspect-btn').forEach(b=>b.classList.toggle('on', b.dataset.ar===v));
+  layoutViewport();
 }
 document.addEventListener('keydown', e=>{
   if(e.key==='Tab'){e.preventDefault();togglePanel();}
+  if(e.key==='Escape' && settingsOpen){ toggleSettings(false); }  // Esc 关闭设置浮层
   if(e.key===' '){e.preventDefault(); driftOn?togglePlay():toggleDrift();} // 空格：开启时间轴 / 播放暂停
   if(e.key==='1') applyPreset('morning');
   if(e.key==='2') applyPreset('noon');
@@ -8847,26 +9165,34 @@ document.addEventListener('keydown', e=>{
 });
 
 // ── 固定机位：数字键切到预设广角视角（相机由全局 theta/phi/camR/panX/panZ/panY + 每机位 fov 驱动）──
+// 教室套已抬到二层(+FLOOR_LIFT=3.85)，原教室机位 panY 相应上移；新增 '0' 整栋外观。
 const CAM_VIEWS = {
-  '5': { name:'全景概览',    fov:68, theta:-0.22,   phi:0.09, camR:11.0, panX: 0.0, panZ: 1.0, panY: 0.30 },
-  '6': { name:'教师视角',    fov:72, theta:Math.PI, phi:0.03, camR: 6.5, panX: 0.0, panZ: 3.0, panY: 0.15 },
-  '7': { name:'后→前 广角', fov:78, theta:0.0,     phi:0.03, camR:11.5, panX: 0.0, panZ: 0.0, panY:-0.10 },
-  '8': { name:'办公室视角',  fov:80, theta:1.5708,  phi:0.10, camR: 4.8, panX:-1.5, panZ:21.5, panY: 0.70 }, // 后方办公室：门侧望向西窗
-  '9': { name:'侧窗全景',    fov:70, theta:2.20,    phi:0.14, camR: 8.5, panX:-2.0, panZ: 4.0, panY: 0.30 },
+  '5': { name:'全景概览',    fov:68, theta:-0.22,   phi:0.09, camR:11.0, panX: 0.0, panZ: 1.0, panY: 4.15 },
+  '6': { name:'教师视角',    fov:72, theta:Math.PI, phi:0.03, camR: 6.5, panX: 0.0, panZ: 3.0, panY: 4.00 },
+  '7': { name:'后→前 广角', fov:78, theta:0.0,     phi:0.03, camR:11.5, panX: 0.0, panZ: 0.0, panY: 3.75 },
+  '8': { name:'办公室视角',  fov:80, theta:1.5708,  phi:0.10, camR: 4.8, panX:-1.5, panZ:21.5, panY: 4.55 }, // 二层后方办公室
+  '9': { name:'侧窗全景',    fov:70, theta:2.20,    phi:0.14, camR: 8.5, panX:-2.0, panZ: 4.0, panY: 4.15 },
+  '0': { name:'整栋外观',    fov:55, theta:-0.60,   phi:0.45, camR:45.0, panX:-3.0, panZ: 4.0, panY: 2.00 }, // L形俯瞰(教室二层+竖翼B)
+  hall:{ name:'报告厅',      fov:76, theta:1.5708,  phi:0.12, camR: 9.5, panX:-15.0, panZ:-13.0, panY: 0.40 }, // 竖翼B一层报告厅：观众区朝西看舞台/LED(面板按钮触发)
 };
 const camLabel = document.createElement('div');
 camLabel.style.cssText = 'position:fixed;left:50%;top:64px;transform:translateX(-50%);padding:6px 14px;background:rgba(0,0,0,0.55);color:#fff;font:14px/1.4 system-ui,sans-serif;letter-spacing:1px;border-radius:6px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:60;';
 document.body.appendChild(camLabel);
 let camLabelTimer;
 function showCamLabel(t){ camLabel.textContent=t; camLabel.style.opacity='1'; clearTimeout(camLabelTimer); camLabelTimer=setTimeout(()=>{camLabel.style.opacity='0';},1500); }
-document.addEventListener('keydown', e=>{
-  if(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
-  const v = CAM_VIEWS[e.key];
+// 套用一个机位（数字键与设置面板机位按钮共用）
+function applyView(v){
   if(!v) return;
   theta=v.theta; phi=v.phi; camR=v.camR; panX=v.panX; panZ=v.panZ; panY=v.panY;
   if(v.fov){ camera.fov=v.fov; camera.updateProjectionMatrix(); }  // 广角：每机位可带自己的 FOV
   updateCam();
-  showCamLabel('机位 '+e.key+'　'+v.name);
+  showCamLabel(v.name);
+}
+document.addEventListener('keydown', e=>{
+  if(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  const v = CAM_VIEWS[e.key];
+  if(!v) return;
+  applyView(v);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -8982,7 +9308,7 @@ document.addEventListener('keydown', e=>{
     raycaster.setFromCamera(ndc(e), camera);
     const meshes=[]; scene.traverse(o=>{ if(o.isMesh && o.visible) meshes.push(o); });
     const hit=raycaster.intersectObjects(meshes, false)[0];
-    const px=e.clientX/innerWidth, py=e.clientY/innerHeight;
+    const {w:_vw,h:_vh,left:_vl,top:_vt}=frameRect(); const px=(e.clientX-_vl)/_vw, py=(e.clientY-_vt)/_vh;
     let objLine, hitLine;
     if(hit){
       const m=hit.object, p=hit.point;

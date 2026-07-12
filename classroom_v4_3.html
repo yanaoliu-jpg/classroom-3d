@@ -260,7 +260,7 @@ input[type=range].r:hover::-webkit-slider-thumb{transform:scale(1.25);box-shadow
 </style>
 </head>
 <body>
-<div class="title">空教室 · Lumière & Ombre</div>
+<div class="title">Lumière & Ombre</div>
 <canvas id="bloomCanvas"></canvas>
 <canvas id="grainCanvas"></canvas>
 
@@ -274,7 +274,6 @@ input[type=range].r:hover::-webkit-slider-thumb{transform:scale(1.25);box-shadow
 
 <div id="topBtns">
   <button class="top-btn" id="shotBtn" onclick="takeShot()">↓ 截图</button>
-  <button class="top-btn" id="driftBtn" onclick="toggleDrift()">⏱ 时间轴</button>
   <button class="top-btn" id="settingsBtn" onclick="toggleSettings()">⚙ 设置</button>
 </div>
 
@@ -282,23 +281,6 @@ input[type=range].r:hover::-webkit-slider-thumb{transform:scale(1.25);box-shadow
 <div id="timeDisplay"></div>
 <div id="fpsMeter">-- FPS</div>
 <div id="compass" title="方位罗盘：屏幕上方=你面朝的方向"><div id="compassRose"><b class="cn">N</b><b class="ce">E</b><b class="cs">S</b><b class="cw">W</b></div></div>
-
-<!-- 光源漂移时间轴：拖拽滑块到任意时段，或播放自动推移 -->
-<div id="timeline" class="hidden">
-  <button id="playBtn" class="tl-btn" onclick="togglePlay()" title="播放 / 暂停">▶</button>
-  <div class="tl-wrap">
-    <input type="range" id="timeSlider" min="0" max="0.9999" step="0.0004" value="0" oninput="onTimelineScrub(this.value)">
-    <div class="tl-ticks"><span>06</span><span>09</span><span>12</span><span>15</span><span>18</span><span>21</span></div>
-  </div>
-  <span id="timeSliderLabel">06:00</span>
-  <div class="tl-speeds">
-    <button class="tl-speed" data-spd="0.25" onclick="setDriftSpeed(0.25)">0.25×</button>
-    <button class="tl-speed" data-spd="0.5"  onclick="setDriftSpeed(0.5)">0.5×</button>
-    <button class="tl-speed on" data-spd="1" onclick="setDriftSpeed(1)">1×</button>
-    <button class="tl-speed" data-spd="1.5" onclick="setDriftSpeed(1.5)">1.5×</button>
-    <button class="tl-speed" data-spd="2"   onclick="setDriftSpeed(2)">2×</button>
-  </div>
-</div>
 
 <!-- 收起/展开手柄：必须是 #panel 的兄弟节点(不能放进 #panel 内)——#panel 收起时用 transform:translateY(100%)，
      transform 会成为其内 position:fixed 子元素的包含块，若手柄在里面会随面板一起滑出屏幕外 → 收起后无法再点开。 -->
@@ -320,36 +302,23 @@ input[type=range].r:hover::-webkit-slider-thumb{transform:scale(1.25);box-shadow
     <button id="settingsClose" onclick="toggleSettings(false)" title="关闭 (Esc)">✕</button>
   </div>
   <div id="settingsBody">
-    <!-- 画幅 Aspect ratio -->
-    <div class="pcol">
-      <div class="ptitle">🎬 画幅 · Aspect</div>
-      <div class="aspect-row">
-        <button class="aspect-btn on" data-ar="2.3333" onclick="setAspect('2.3333')">21:9</button>
-        <button class="aspect-btn" data-ar="1.7778" onclick="setAspect('1.7778')">16:9</button>
-        <button class="aspect-btn" data-ar="1.3333" onclick="setAspect('1.3333')">4:3</button>
-        <button class="aspect-btn" data-ar="full" onclick="setAspect('full')">全屏</button>
-      </div>
-    </div>
     <!-- 机位 View：一键切到各区域 -->
     <div class="pcol">
       <div class="ptitle">🎥 机位 · View</div>
       <div class="aspect-row" style="flex-wrap:wrap;gap:5px">
-        <button class="aspect-btn" onclick="applyView(CAM_VIEWS['0'])">整栋外观</button>
-        <button class="aspect-btn" onclick="applyView(CAM_VIEWS['5'])">二层教室</button>
-        <button class="aspect-btn" onclick="applyView(CAM_VIEWS['8'])">办公室</button>
-        <button class="aspect-btn" onclick="applyView(CAM_VIEWS.hall)">报告厅</button>
+        <button class="aspect-btn" onclick="applyView(CAM_VIEWS['0'])">教室外观</button>
+        <button class="aspect-btn" onclick="applyView(CAM_VIEWS['5'])">教室</button>
       </div>
     </div>
-    <!-- 性能 Performance：清晰度档位 + 抗锯齿 + 动态分辨率 -->
+    <!-- 性能 Performance：清晰度档位 + 动态分辨率（抗锯齿已取消） -->
     <div class="pcol">
       <div class="ptitle">⚡ 性能 · Performance</div>
       <div class="q-cap">清晰度（越高越清晰、越吃帧）</div>
       <div class="aspect-row">
-        <button class="aspect-btn q-btn on" data-q="1.0" onclick="setQuality('1.0')">省电 1.0</button>
+        <button class="aspect-btn q-btn" data-q="1.0" onclick="setQuality('1.0')">省电 1.0</button>
         <button class="aspect-btn q-btn" data-q="1.3" onclick="setQuality('1.3')">均衡 1.3</button>
-        <button class="aspect-btn q-btn" data-q="1.75" onclick="setQuality('1.75')">高清 1.75</button>
+        <button class="aspect-btn q-btn on" data-q="1.75" onclick="setQuality('1.75')">高清 1.75</button>
       </div>
-      <div class="perf-tog"><span>抗锯齿</span><label class="tog"><input type="checkbox" id="aaOn" checked onchange="setAA(this.checked)"><span class="togs"></span></label></div>
       <div class="perf-tog"><span>动态分辨率 · 转动时降</span><label class="tog"><input type="checkbox" id="dynOn" onchange="setDynRes(this.checked)"><span class="togs"></span></label></div>
     </div>
     <!-- Ceiling LED -->
@@ -369,13 +338,15 @@ input[type=range].r:hover::-webkit-slider-thumb{transform:scale(1.25);box-shadow
       </div>
       <div class="row"><label>亮度</label><input type="range" class="b" id="corrInt" min="0" max="1.5" value="1.0" step="0.05"><span class="val" id="corrIntv">1.00</span></div>
     </div>
-    <!-- Office light -->
+    <!-- Weather · 窗外天气 -->
     <div class="pcol">
-      <div class="ptitle b">
-        <div class="ldot" id="oDot" style="background:#f3efe4;box-shadow:0 0 5px rgba(243,239,228,.7)"></div>办公室灯 · Office
-        <div class="tog-row"><label for="offOn">开启</label><label class="tog"><input type="checkbox" id="offOn" checked><span class="togs"></span></label></div>
+      <div class="ptitle">🌤 天气 · Weather</div>
+      <div class="aspect-row" style="flex-wrap:wrap;gap:5px">
+        <button class="aspect-btn wx-btn on" data-wx="clear"  onclick="setWeather('clear')">晴天</button>
+        <button class="aspect-btn wx-btn"    data-wx="cloudy" onclick="setWeather('cloudy')">阴天</button>
+        <button class="aspect-btn wx-btn"    data-wx="rain"   onclick="setWeather('rain')">雨天</button>
+        <button class="aspect-btn wx-btn"    data-wx="snow"   onclick="setWeather('snow')">雪天</button>
       </div>
-      <div class="row"><label>亮度</label><input type="range" class="b" id="offInt" min="0" max="2" value="1.0" step="0.05"><span class="val" id="offIntv">1.00</span></div>
     </div>
   </div>
 </div>
@@ -4695,7 +4666,7 @@ function viewSize(){
 }
 // 画幅：把渲染矩形约束成所选比例(16:9 默认 / 2.35 / 21:9 / 4:3)，在可用区内居中，
 // 四周露出的黑色 body 即上下(letterbox)或左右(pillarbox)黑边。
-let frameAspect = 21/9;   // 默认画幅 21:9（可切 16:9 / 4:3）
+let frameAspect = 0;   // 默认全屏铺满（画幅选择器已删）
 function frameRect(){
   const av = viewSize();
   if(!frameAspect){ return { w: av.w, h: av.h, left: 0, top: 0 }; } // 0=全屏：铺满可用区(无黑边)
@@ -4708,7 +4679,7 @@ function frameRect(){
 }
 { const r=frameRect(); renderer.setSize(r.w, r.h); }
 // ── 渲染清晰度 / 动态分辨率 状态（⚙设置面板控制；curRes = 当前实际 pixelRatio）──
-let resStill = 1.0;          // 静止(档位)分辨率：省电1.0 / 均衡1.3 / 高清1.75，默认省电
+let resStill = 1.75;         // 静止(档位)分辨率：省电1.0 / 均衡1.3 / 高清1.75，默认高清
 let dynResEnabled = false;   // 动态分辨率：转动/移动时临时降到 RES_MOVING
 const RES_MOVING = 1.0;      // 运动时分辨率
 let curRes = resStill;       // 当前实际渲染倍率（动态时每帧平滑趋近）
@@ -6873,6 +6844,212 @@ function makeExteriorTex(){
 }
 const exteriorTex = makeExteriorTex();
 
+// ── 窗外天气背景贴图（程序化，静态；2048×512 全景，供 3 扇窗各取横向切片）──────────────
+// 4 种天气：晴/阴/雨/雪。建一次缓存。挂在 extBg 背景板上、toneMapped:false 直显画布亮度，
+// 昼夜明暗由 extMats 的 color 乘数在光照计算里驱动（见 applyPreset / 连续时间两处）。
+function makeWeatherTex(kind){
+  const W=2048, H=512;
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const ctx=cv.getContext('2d');
+  const horizon=Math.round(H*0.68);
+  const rgba=(c,a)=>'rgba('+c[0]+','+c[1]+','+c[2]+','+a+')';
+  const lerp=(a,b,t)=>a+(b-a)*t;
+  const sstep=(e0,e1,x)=>{ let t=Math.max(0,Math.min(1,(x-e0)/(e1-e0))); return t*t*(3-2*t); };
+  const P={
+    clear:  {zen:[47,111,184], mid:[121,176,226], hor:[207,230,244], sun:true,  lo:0.52, hi:0.74, top:[255,255,255], bot:[196,210,226], covScale:0.9, land:[120,140,96],  landHaze:[210,224,232]},
+    cloudy: {zen:[126,135,145], mid:[158,166,175], hor:[196,201,206], sun:false, lo:0.30, hi:0.60, top:[216,222,229], bot:[138,147,157], covScale:1.0, land:[120,127,112], landHaze:[200,205,208]},
+    rain:   {zen:[52,60,70],    mid:[74,83,93],    hor:[104,112,121], sun:false, lo:0.28, hi:0.56, top:[122,131,141], bot:[42,48,56],   covScale:1.0, land:[70,76,70],    landHaze:[110,117,124]},
+    snow:   {zen:[132,144,158], mid:[176,187,199], hor:[214,223,231], sun:false, lo:0.32, hi:0.60, top:[242,247,251], bot:[172,183,195], covScale:1.0, land:[218,226,232], landHaze:[224,231,237]},
+  }[kind];
+
+  // 1) 天空渐变（天顶深 → 地平线雾白） + 太阳（仅晴天）
+  const sky=ctx.createLinearGradient(0,0,0,horizon);
+  sky.addColorStop(0,rgba(P.zen,1)); sky.addColorStop(0.6,rgba(P.mid,1)); sky.addColorStop(1,rgba(P.hor,1));
+  ctx.fillStyle=sky; ctx.fillRect(0,0,W,horizon);
+  if(P.sun){
+    const sx=W*0.66, sy=horizon*0.34, g=ctx.createRadialGradient(sx,sy,0,sx,sy,horizon*0.95);
+    g.addColorStop(0,'rgba(255,251,236,0.9)'); g.addColorStop(0.18,'rgba(255,246,214,0.4)'); g.addColorStop(1,'rgba(255,246,214,0)');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,horizon);
+  }
+
+  // 2) fBm 分形噪声云（小分辨率算噪声 → ImageData → 双线性放大铺天，云形自然非圆团）
+  const seed={clear:7,cloudy:19,rain:31,snow:43}[kind]||3;
+  const hash=(x,y)=>{ let n=(x*374761393 + y*668265263 + seed*362437)|0; n=(n^(n>>>13))*1274126177|0; return ((n^(n>>>16))>>>0)/4294967295; };
+  const sm=t=>t*t*(3-2*t);
+  const vnoise=(x,y)=>{ const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi;
+    const a=hash(xi,yi),b=hash(xi+1,yi),c=hash(xi,yi+1),d=hash(xi+1,yi+1);
+    const u=sm(xf),v=sm(yf); return lerp(lerp(a,b,u),lerp(c,d,u),v); };
+  const fbm=(x,y)=>{ let f=0,amp=0.5,fr=1,s=0; for(let o=0;o<5;o++){ f+=amp*vnoise(x*fr,y*fr); s+=amp; amp*=0.5; fr*=2;} return f/s; };
+  const cw=512, ch=Math.round(cw*horizon/W);
+  const cc=document.createElement('canvas'); cc.width=cw; cc.height=ch;
+  const cctx=cc.getContext('2d'); const img=cctx.createImageData(cw,ch);
+  for(let y=0;y<ch;y++)for(let x=0;x<cw;x++){
+    const raw=fbm(x/cw*7.0, y/ch*2.6);
+    let cov=sstep(P.lo,P.hi,raw)*P.covScale;
+    const lit=sstep(P.lo,P.hi+0.10,raw);
+    cov *= 1 - Math.pow(y/ch,1.6)*0.55;   // 近地平线云变薄
+    const i=(y*cw+x)*4;
+    img.data[i]=lerp(P.bot[0],P.top[0],lit); img.data[i+1]=lerp(P.bot[1],P.top[1],lit); img.data[i+2]=lerp(P.bot[2],P.top[2],lit);
+    img.data[i+3]=Math.max(0,Math.min(1,cov))*255;
+  }
+  cctx.putImageData(img,0,0);
+  ctx.imageSmoothingEnabled=true; ctx.drawImage(cc,0,0,cw,ch,0,0,W,horizon);
+
+  // 3) 地平线大气雾带（提亮地平线 → 空气纵深）
+  const hz=ctx.createLinearGradient(0,horizon-80,0,horizon);
+  hz.addColorStop(0,rgba(P.landHaze,'0')); hz.addColorStop(1,rgba(P.landHaze,'0.9'));
+  ctx.fillStyle=hz; ctx.fillRect(0,horizon-80,W,80);
+
+  // 4) 远处丘陵/树线（噪声起伏 + 模糊融雾）
+  ctx.save(); ctx.filter='blur(2px)';
+  ctx.beginPath(); ctx.moveTo(0,horizon+2);
+  for(let x=0;x<=W;x+=5){ const n=fbm(x/W*22,40); const crown=Math.pow(n,2)*30; ctx.lineTo(x,horizon-2-crown); }
+  ctx.lineTo(W,horizon+2); ctx.closePath(); ctx.fillStyle=rgba(P.land,'0.5'); ctx.fill(); ctx.restore();
+
+  // 5) 地面（地平线雾 → 前景地）
+  const gnd=ctx.createLinearGradient(0,horizon,0,H);
+  gnd.addColorStop(0,rgba(P.landHaze,'0.9')); gnd.addColorStop(0.2,rgba(P.land,'1')); gnd.addColorStop(1,rgba([P.land[0]*0.7|0,P.land[1]*0.7|0,P.land[2]*0.7|0],'1'));
+  ctx.fillStyle=gnd; ctx.fillRect(0,horizon,W,H-horizon);
+
+  // 6) 天气粒子
+  let s2=seed*7+1; const rnd=()=>{ s2=(s2*9301+49297)%233280; return s2/233280; };
+  if(kind==='rain'){
+    ctx.save(); ctx.filter='blur(0.5px)';
+    ctx.strokeStyle='rgba(206,215,226,0.22)'; ctx.lineWidth=1.0;
+    for(let i=0;i<1400;i++){ const x=rnd()*W,y=rnd()*H,len=16+rnd()*30; ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x-6,y+len); ctx.stroke(); }
+    ctx.strokeStyle='rgba(222,230,240,0.36)'; ctx.lineWidth=1.8;
+    for(let i=0;i<130;i++){ const x=rnd()*W,y=rnd()*H,len=28+rnd()*46; ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x-9,y+len); ctx.stroke(); }
+    ctx.restore(); ctx.fillStyle='rgba(80,90,102,0.12)'; ctx.fillRect(0,0,W,H);
+  } else if(kind==='snow'){
+    const flake=(n,rMax,al,blur)=>{ ctx.save(); ctx.filter='blur('+blur+'px)'; for(let i=0;i<n;i++){ const x=rnd()*W,y=rnd()*H,r=1+rnd()*rMax; ctx.fillStyle='rgba(255,255,255,'+al+')'; ctx.beginPath(); ctx.arc(x,y,r,0,6.3); ctx.fill(); } ctx.restore(); };
+    flake(680,1.5,'0.5',0.3); flake(190,3.0,'0.85',1.3);
+  }
+
+  const t=new THREE.CanvasTexture(cv);
+  t.colorSpace=THREE.SRGBColorSpace;
+  t.wrapS=THREE.RepeatWrapping; t.wrapT=THREE.ClampToEdgeWrapping;
+  return t;
+}
+const weatherTex = {};  // 旧平面天气系统已停用（改用 scene.background equirect）
+const extWindows = [];         // 每扇朝外窗：{mat, texByKind} 供 setWeather 切换
+let currentWeather = 'clear';  // 默认晴天
+
+// ════════ 窗外真 3D 环境：equirect 环境图作为 scene.background ════════════════════
+// 一张等距柱状全景(上半天空+云，下半地面+地平线)放进 scene.background：不受相机远面裁剪、
+// 天生正确的旋转视差，透过窗看到的是真实天空/地平线/地面。懒加载，只建当前天气。
+function makeEnvTex(kind){
+  const W=2048,H=1024,cv=document.createElement('canvas');cv.width=W;cv.height=H;
+  const ctx=cv.getContext('2d'); const hV=Math.round(H*0.5);
+  const rgba=(c,a)=>'rgba('+c[0]+','+c[1]+','+c[2]+','+a+')';
+  const lerp=(a,b,t)=>a+(b-a)*t, sstep=(e0,e1,x)=>{let t=Math.max(0,Math.min(1,(x-e0)/(e1-e0)));return t*t*(3-2*t);};
+  const P={
+    clear: {zen:[70,132,196],mid:[135,182,226],hor:[206,229,243],sun:true, lo:0.52,hi:0.74,top:[255,255,255],bot:[200,214,230],cov:0.9, gN:[104,124,80], gF:[150,168,120]},
+    cloudy:{zen:[130,139,149],mid:[162,170,179],hor:[198,203,208],sun:false,lo:0.30,hi:0.60,top:[220,225,231],bot:[142,151,161],cov:1.0, gN:[104,110,96], gF:[150,157,140]},
+    rain:  {zen:[60,68,79],  mid:[84,93,103], hor:[112,120,129],sun:false,lo:0.28,hi:0.56,top:[128,137,147],bot:[48,54,62], cov:1.0, gN:[60,66,60],  gF:[92,98,90]},
+    snow:  {zen:[140,152,166],mid:[184,195,206],hor:[218,226,233],sun:false,lo:0.32,hi:0.60,top:[244,248,252],bot:[178,189,200],cov:1.0, gN:[226,232,237],gF:[210,220,228]},
+  }[kind];
+  const g=ctx.createLinearGradient(0,0,0,hV);
+  g.addColorStop(0,rgba(P.zen,1));g.addColorStop(0.7,rgba(P.mid,1));g.addColorStop(1,rgba(P.hor,1));
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,hV);
+  if(P.sun){const sx=W*0.5,sy=hV*0.58,rg=ctx.createRadialGradient(sx,sy,0,sx,sy,hV*0.7);
+    rg.addColorStop(0,'rgba(255,251,236,0.85)');rg.addColorStop(0.2,'rgba(255,246,214,0.35)');rg.addColorStop(1,'rgba(255,246,214,0)');
+    ctx.fillStyle=rg;ctx.fillRect(0,0,W,hV);}
+  const seed={clear:7,cloudy:19,rain:31,snow:43}[kind]||3;
+  const hash=(x,y)=>{let n=(x*374761393+y*668265263+seed*362437)|0;n=(n^(n>>>13))*1274126177|0;return((n^(n>>>16))>>>0)/4294967295;};
+  const sm=t=>t*t*(3-2*t);
+  const vn=(x,y)=>{const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi;const a=hash(xi,yi),b=hash(xi+1,yi),c=hash(xi,yi+1),d=hash(xi+1,yi+1);const u=sm(xf),v=sm(yf);return lerp(lerp(a,b,u),lerp(c,d,u),v);};
+  const fbm=(x,y)=>{let f=0,am=0.5,fr=1,s=0;for(let o=0;o<5;o++){f+=am*vn(x*fr,y*fr);s+=am;am*=0.5;fr*=2;}return f/s;};
+  const cw=512,ch=Math.round(cw*hV/W);const cc=document.createElement('canvas');cc.width=cw;cc.height=ch;
+  const cx2=cc.getContext('2d'),im=cx2.createImageData(cw,ch);
+  for(let y=0;y<ch;y++)for(let x=0;x<cw;x++){
+    const raw=fbm(x/cw*9.0,y/ch*3.2);
+    let cov=sstep(P.lo,P.hi,raw)*P.cov; const lit=sstep(P.lo,P.hi+0.10,raw);
+    cov*=sstep(0.02,0.2,y/ch)*(1-Math.pow(y/ch,2)*0.6);
+    const i=(y*cw+x)*4;
+    im.data[i]=lerp(P.bot[0],P.top[0],lit);im.data[i+1]=lerp(P.bot[1],P.top[1],lit);im.data[i+2]=lerp(P.bot[2],P.top[2],lit);
+    im.data[i+3]=Math.max(0,Math.min(1,cov))*255;
+  }
+  cx2.putImageData(im,0,0);ctx.imageSmoothingEnabled=true;ctx.drawImage(cc,0,0,cw,ch,0,0,W,hV);
+  // 下半=地面（地平线雾 → 远地 → 近地）
+  const gg=ctx.createLinearGradient(0,hV,0,H);
+  gg.addColorStop(0,rgba(P.hor,1));gg.addColorStop(0.12,rgba(P.gF,1));gg.addColorStop(1,rgba(P.gN,1));
+  ctx.fillStyle=gg;ctx.fillRect(0,hV,W,H-hV);
+  // 地平线远树线（噪声起伏 + 模糊融雾）
+  ctx.save();ctx.filter='blur(2px)';ctx.beginPath();ctx.moveTo(0,hV+3);
+  for(let x=0;x<=W;x+=5){const n=fbm(x/W*26,55);const cr=Math.pow(n,2)*22;ctx.lineTo(x,hV-cr);}
+  ctx.lineTo(W,hV+3);ctx.closePath();ctx.fillStyle=rgba(P.gF,'0.55');ctx.fill();ctx.restore();
+  const t=new THREE.CanvasTexture(cv);t.colorSpace=THREE.SRGBColorSpace;t.mapping=THREE.EquirectangularReflectionMapping;
+  return t;
+}
+const _envCache={}; const envTexFor=k=>_envCache[k]||(_envCache[k]=makeEnvTex(k));
+scene.background = envTexFor(currentWeather);
+const envParts = { envTexFor };
+
+// ════════ 天气 → 全场光照 + 雨雪下落粒子 ════════════════════════════════════════
+const _wxGrey = new THREE.Color(0.60,0.66,0.75);      // 阴雨冷灰
+let wxSun=1, wxFillMul=1, wxSunGrey=0, wxHemiGrey=0;   // 天气光照因子（每帧 applyWeatherLighting 注入）
+const WX_LIGHT = {
+  clear:  {sun:1.00, fill:1.00, sunGrey:0.00, hemiGrey:0.00, exp:1.00},
+  cloudy: {sun:0.40, fill:1.28, sunGrey:0.55, hemiGrey:0.46, exp:0.95},
+  rain:   {sun:0.08, fill:1.18, sunGrey:0.78, hemiGrey:0.64, exp:0.82},   // 无直射，只剩微弱冷灰漫射
+  snow:   {sun:0.50, fill:1.34, sunGrey:0.55, hemiGrey:0.52, exp:1.00},
+};
+// 每帧在 sync()/光照计算之后覆盖：弱化直射太阳、冷灰化、淡出阳光柱/地面光斑
+function applyWeatherLighting(){
+  mainLight.intensity *= wxSun;
+  if(wxSunGrey>0)  mainLight.color.lerp(_wxGrey, wxSunGrey);
+  if(wxHemiGrey>0) hemiLight.color.lerp(_wxGrey, wxHemiGrey);
+  if(wxSun<0.9){
+    if(typeof winShafts!=='undefined') winShafts.forEach(o=>{ if(o.material) o.material.opacity *= wxSun; });
+    if(typeof winPatches!=='undefined') winPatches.forEach(o=>{ if(o.material) o.material.opacity *= wxSun; });
+  }
+}
+
+// ── 雨/雪粒子：西墙外静态体积(x<-8，窗朝向那侧)，落到底回收；不落进教室 ──────────
+const PB = { xMin:-74, xMax:-8, yH:36, zSpan:96, yBase:0 };
+const precipGroup = new THREE.Group(); precipGroup.visible=false; scene.add(precipGroup);
+let precipKind=null, precipGeo=null, precipObj=null, precipDrops=null, precipVel=null, _precipT=0, _precipLast=performance.now();
+function buildPrecip(kind){
+  while(precipGroup.children.length){ const c=precipGroup.children.pop(); c.geometry.dispose(); c.material.dispose(); }
+  const rain = kind==='rain', n = rain?1500:1300;
+  precipDrops=[]; precipVel=[];
+  const rx=()=>PB.xMin+Math.random()*(PB.xMax-PB.xMin), rz=()=>(Math.random()-0.5)*PB.zSpan, ry=()=>PB.yBase+Math.random()*PB.yH;
+  if(rain){
+    const arr=new Float32Array(n*2*3);
+    for(let i=0;i<n;i++){ const x=rx(),y=ry(),z=rz(),len=0.7+Math.random()*0.9;
+      precipDrops.push({x,y,z,len}); precipVel.push(30+Math.random()*16);
+      const o=i*6; arr[o]=x;arr[o+1]=y;arr[o+2]=z; arr[o+3]=x;arr[o+4]=y-len;arr[o+5]=z; }
+    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(arr,3));
+    precipObj=new THREE.LineSegments(g,new THREE.LineBasicMaterial({color:0xaebccb,transparent:true,opacity:0.34,fog:false,toneMapped:false}));
+    precipGeo=g;
+  } else {
+    const arr=new Float32Array(n*3);
+    for(let i=0;i<n;i++){ const x=rx(),y=ry(),z=rz();
+      precipDrops.push({x,y,z,ph:Math.random()*6.28}); precipVel.push(2.0+Math.random()*2.4);
+      const o=i*3; arr[o]=x;arr[o+1]=y;arr[o+2]=z; }
+    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(arr,3));
+    precipObj=new THREE.Points(g,new THREE.PointsMaterial({color:0xffffff,size:0.3,transparent:true,opacity:0.85,fog:false,toneMapped:false,depthWrite:false}));
+    precipGeo=g;
+  }
+  precipGroup.add(precipObj); precipKind=kind;
+}
+function updatePrecip(){
+  if(!precipGroup.visible||!precipDrops) return;
+  const now=performance.now(), dt=Math.min(0.05,(now-_precipLast)/1000); _precipLast=now; _precipT+=dt;
+  const arr=precipGeo.attributes.position.array, rain=precipKind==='rain';
+  for(let i=0;i<precipDrops.length;i++){ const d=precipDrops[i]; d.y-=precipVel[i]*dt;
+    if(d.y<PB.yBase){ d.y=PB.yBase+PB.yH; d.x=PB.xMin+Math.random()*(PB.xMax-PB.xMin); d.z=(Math.random()-0.5)*PB.zSpan; }
+    if(rain){ const o=i*6; arr[o]=d.x;arr[o+1]=d.y;arr[o+2]=d.z; arr[o+3]=d.x;arr[o+4]=d.y-d.len;arr[o+5]=d.z; }
+    else { const dx=Math.sin(_precipT*0.8+d.ph)*0.5, o=i*3; arr[o]=d.x+dx;arr[o+1]=d.y;arr[o+2]=d.z; }
+  }
+  precipGeo.attributes.position.needsUpdate=true;
+}
+function setPrecip(kind){
+  if(kind==='rain'||kind==='snow'){ if(precipKind!==kind) buildPrecip(kind); precipGroup.visible=true; }
+  else precipGroup.visible=false;
+}
+
+
 // 窗帘纹理（折叠布料感）
 function makeCurtainTex(){
   const s = 128; const cv = document.createElement('canvas');
@@ -6903,20 +7080,7 @@ winPositions.forEach((wz,wi)=>{
   const worldZ = -RD/2+6+RD/2+wz;
   const wx = -RW/2;
 
-  // ── 窗外景深背景（每扇窗取全景不同切片 → 三窗景物各异，不再千篇一律）─────────────
-  const extTex = exteriorTex.clone(); extTex.needsUpdate = true;
-  extTex.wrapS = THREE.RepeatWrapping;
-  extTex.repeat.x = 0.5;
-  extTex.offset.x = [0.0, 0.25, 0.5][wi % 3];
-  // 窗外天空面片已隐藏（用户要求：不要蓝色，玻璃完全透明、窗上啥也没有）。
-  // 左墙是真窗洞 → 透过窗户直接看到外面（场景背景），玻璃真正透明。
-  const extMat = new THREE.MeshBasicMaterial({ color: 0x27435f });
-  const extBg = new THREE.Mesh(new THREE.PlaneGeometry(WIN_W, WIN_H), extMat);
-  extBg.rotation.y = Math.PI/2;
-  extBg.position.set(wx - 0.06, WIN_BOTTOM + WIN_H/2, worldZ);
-  extBg.visible = false;
-  scene.add(extBg);
-  extMats.push(extMat);
+  // 窗外天气改由 scene.background(equirect 环境图)呈现，旧的每窗平面背景板已移除。
 
   // 玻璃 tint 辉光层已去掉 → 窗户完全透明（skyGlow 保留占位但不可见，避免下游 skyGlows 引用报错）
   const skyGlowMat = new THREE.MeshBasicMaterial({ color: 0xd8eaff, transparent: true, opacity: 0.0 });
@@ -7421,227 +7585,6 @@ const fluoroLights = [];   // 每组灯具下方一盏点光源（12 盏，位�
   scene.add(extraFloor);
 }
 
-// ══ 独立办公室（教室后方 z>18；东墙开门经走廊连通；仿参考图：工位隔断+办公椅+清窗）════════
-// 自成一体的房间：4 实墙+实吊顶(castShadow) 把教室全局太阳挡在外，内部由自带 LED 灯板+窗侧暖
-// SpotLight 照明；远端墙开两扇「教室同款」白框清窗；东墙(x=4)开门→连接走廊延伸段。
-// 灯光句柄暴露给面板「办公室灯」开关/亮度控制。
-const officeLights=[];   // {light, base} 供 syncOffice() 缩放
-const officePanels=[];   // 发光灯板材质，随开关/亮度改 emissiveIntensity
-const OFF_DOORZ = 20.2;  // 东墙门中心 z（连接走廊延伸段/连廊）
-const officeGroup = new THREE.Group(); scene.add(officeGroup); // 提帧⑤：整间办公室挂此组，被后墙遮挡时整组隐藏
-(function officeRoom(){
-  const scene = officeGroup;   // 提帧⑤：本 IIFE 内所有 scene.add 重定向到可隐藏组（组为单位变换，世界坐标不变）
-  const add = (geo,material,x,y,z,rx=0,ry=0,rz=0)=>{ const me=new THREE.Mesh(geo,material); me.position.set(x,y,z); me.rotation.set(rx,ry,rz); me.castShadow=true; me.receiveShadow=true; officeGroup.add(me); return me; }; // 局部 add 覆盖全局：窗框/门框等也进组
-  const OW=8, OD=6, OH=RH;                 // 8(宽)×6(深)×3.5(高)
-  const Z0=18.5, Z1=Z0+OD;                // z ∈ [18.5, 24.5]
-  const X0=-OW/2, X1=OW/2;                // x ∈ [-4, 4]
-  const OCX=0, OCZ=(Z0+Z1)/2;            // 房间中心 (0, ·, 21.5)
-
-  // ── 木地板纹理（暖色木纹长条，仿参考图）─────────────────────────────────────
-  function woodTex(){
-    const W=512, H=512, cv=document.createElement('canvas');
-    cv.width=W; cv.height=H; const ctx=cv.getContext('2d');
-    ctx.fillStyle='#b3803f'; ctx.fillRect(0,0,W,H);
-    const plank=74;
-    for(let y=0; y<H; y+=plank){
-      const base=170+Math.floor(Math.random()*24)-12;
-      ctx.fillStyle=`rgb(${base},${Math.floor(base*0.72)},${Math.floor(base*0.42)})`;
-      ctx.fillRect(0, y, W, plank-2);
-      // 木纹长丝
-      for(let i=0;i<26;i++){
-        ctx.strokeStyle=`rgba(90,55,20,${0.05+Math.random()*0.10})`;
-        ctx.lineWidth=1;
-        const gy=y+2+Math.random()*(plank-6);
-        ctx.beginPath(); ctx.moveTo(0,gy);
-        for(let x=0;x<=W;x+=32) ctx.lineTo(x, gy+Math.sin(x*0.05+y)*1.6);
-        ctx.stroke();
-      }
-      // 板缝
-      ctx.fillStyle='rgba(60,38,14,0.55)'; ctx.fillRect(0, y+plank-2, W, 2);
-    }
-    const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace;
-    t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(3,2.2);
-    return t;
-  }
-  const floorO=new THREE.Mesh(new THREE.PlaneGeometry(OW,OD), mat(0x9a7038,0.55,0.04,woodTex()));
-  floorO.rotation.x=-Math.PI/2; floorO.position.set(OCX,0.0,OCZ);
-  floorO.receiveShadow=true; scene.add(floorO);
-
-  // ── 墙体（暖白，带护墙裙；全部 castShadow 封住全局太阳）─────────────────────
-  const wMat=mat(0xf1eee7,0.95); wMat.side=THREE.DoubleSide; wMat.shadowSide=THREE.DoubleSide;
-  function wallSeal(m){ m.receiveShadow=true; m.castShadow=true; scene.add(m); return m; }
-  // 前墙(z=Z0,面向+z入室)
-  wallSeal(Object.assign(new THREE.Mesh(new THREE.PlaneGeometry(OW,OH),wMat),{}))
-    .position.set(OCX,OH/2,Z0);
-  // 西墙(x=X0)：教室同朝向的清窗 ×2（ShapeGeometry 挖两洞，开向 -x 室外 → 接同一侧太阳）
-  const WW=2.2, WH=2.4, WB=0.6, WT=WB+WH;   // 窗宽(沿z)/高/下沿/上沿
-  const winCZ=[20.1, 22.9];                   // 两窗中心 z（中间留墙垛）
-  {
-    const shape=new THREE.Shape();
-    shape.moveTo(Z0,0); shape.lineTo(Z1,0); shape.lineTo(Z1,OH); shape.lineTo(Z0,OH); shape.lineTo(Z0,0);
-    winCZ.forEach(cz=>{
-      const h=new THREE.Path();
-      h.moveTo(cz-WW/2,WB); h.lineTo(cz+WW/2,WB); h.lineTo(cz+WW/2,WT); h.lineTo(cz-WW/2,WT); h.lineTo(cz-WW/2,WB);
-      shape.holes.push(h);
-    });
-    const m=new THREE.Mesh(new THREE.ShapeGeometry(shape), wMat);
-    m.rotation.y=-Math.PI/2; m.position.set(X0,0,0);   // 与教室左墙同款变换：世界 z=顶点值、x=X0
-    m.receiveShadow=true; m.castShadow=true; scene.add(m);
-  }
-  // 东墙(x=X1)：开门洞（ShapeGeometry 挖洞）+ 门框 + 门扇 → 经走廊延伸段连通
-  {
-    const dHW=0.6, dTop=2.1;
-    const s=new THREE.Shape();
-    s.moveTo(Z0,0); s.lineTo(Z1,0); s.lineTo(Z1,OH); s.lineTo(Z0,OH); s.lineTo(Z0,0);
-    const h=new THREE.Path();
-    h.moveTo(OFF_DOORZ-dHW,0); h.lineTo(OFF_DOORZ+dHW,0); h.lineTo(OFF_DOORZ+dHW,dTop); h.lineTo(OFF_DOORZ-dHW,dTop); h.lineTo(OFF_DOORZ-dHW,0);
-    s.holes.push(h);
-    const m=new THREE.Mesh(new THREE.ShapeGeometry(s), wMat);
-    m.rotation.y=-Math.PI/2; m.position.set(X1,0,0);
-    m.receiveShadow=true; m.castShadow=true; scene.add(m);
-    // 门框
-    const jamb=mat(0xdedacf,0.7);
-    add(new THREE.BoxGeometry(0.09,dTop+0.06,0.10), jamb, X1, dTop/2, OFF_DOORZ-dHW);
-    add(new THREE.BoxGeometry(0.09,dTop+0.06,0.10), jamb, X1, dTop/2, OFF_DOORZ+dHW);
-    add(new THREE.BoxGeometry(0.09,0.09,dHW*2+0.16), jamb, X1, dTop, OFF_DOORZ);
-    // 门扇（校园款：下绿漆 + 上玻璃，半开约 35°，铰在 -z 侧，朝室内开）
-    const LW=dHW*2-0.08, LH=dTop-0.06, hingeZ=OFF_DOORZ-dHW+0.04;
-    const leaf=new THREE.Group(); leaf.position.set(X1-0.02,0,hingeZ); leaf.rotation.y=-0.62; scene.add(leaf);
-    const lp=(geo,mm,x,y,z,rx=0,ry=0,rz=0)=>{ const me=new THREE.Mesh(geo,mm); me.position.set(x,y,z); me.rotation.set(rx,ry,rz); me.castShadow=false; me.receiveShadow=false; leaf.add(me); };
-    lp(new THREE.BoxGeometry(0.04,LH,LW), mat(0x3f6b4a,0.6), 0, LH/2+0.03, LW/2);
-    lp(new THREE.BoxGeometry(0.05,LH*0.40,LW*0.80), new THREE.MeshStandardMaterial({color:0xbfe0ea,roughness:0.25,transparent:true,opacity:0.5}), 0.006, LH*0.73, LW/2);
-    lp(new THREE.CylinderGeometry(0.018,0.018,0.12,8), mat(0xcfcfcf,0.4,0.6), 0.035, 1.02, LW-0.14, Math.PI/2,0,0);
-  }
-
-  // 护墙裙 + 踢脚线（沿三面实墙，简版）
-  const dadoMat=mat(0xe7ddc6,0.9), skirtMat=mat(0xa79d8d,0.65);
-  [dadoMat,skirtMat].forEach(mm=>mm.side=THREE.DoubleSide);
-  function band(w,h,yc,x,z,ry,mm){ const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),mm); m.position.set(x,yc,z); m.rotation.y=ry; m.receiveShadow=true; scene.add(m); }
-  // 护墙裙只做前/远两面实墙（西墙有窗、东墙有门 → 跳过，避免踢脚线横穿窗/门）
-  [[Z0+0.012, 0],[Z1-0.012, Math.PI]].forEach(([z,ry])=>{
-    band(OW,1.0,0.56, OCX,z, ry, dadoMat);
-    band(OW,0.12,0.06, OCX,z, ry, skirtMat);
-  });
-
-  // ── 远端墙(z=Z1)：实墙（窗户已挪到西墙，与教室同朝向）──────────────
-  { const m=new THREE.Mesh(new THREE.PlaneGeometry(OW,OH),wMat); m.rotation.y=Math.PI; m.position.set(OCX,OH/2,Z1); wallSeal(m); }
-  // 白框 + 窗台（每扇西墙窗；框在 z-y 平面，贴 x=X0 内侧）
-  const fMat=mat(0xf0eeea,0.65), fw=0.06;
-  const sillMat=mat(0xe8e4dc,0.8);
-  const xf=X0+0.03;
-  winCZ.forEach(cz=>{
-    add(new THREE.BoxGeometry(fw,WH+fw*2,fw), fMat, xf, WB+WH/2, cz-WW/2);   // 竖框(前)
-    add(new THREE.BoxGeometry(fw,WH+fw*2,fw), fMat, xf, WB+WH/2, cz+WW/2);   // 竖框(后)
-    add(new THREE.BoxGeometry(fw,fw,WW+fw*2), fMat, xf, WT, cz);             // 上横框
-    add(new THREE.BoxGeometry(fw,fw,WW+fw*2), fMat, xf, WB, cz);             // 下横框
-    add(new THREE.BoxGeometry(fw,WH,fw*0.7), fMat, xf, WB+WH/2, cz);         // 竖中梃
-    add(new THREE.BoxGeometry(0.16,0.05,WW+0.14), sillMat, X0+0.09, WB-0.02, cz); // 窗台
-  });
-  // 窗外背板已去掉：西墙清窗为真开口（与空教室一致），透窗直接见场景背景、太阳完全投入，不再是贴图面板
-
-  // ── 吊顶（实顶 castShadow + 格栅 + 2 灯板）────────────────────────────────────
-  const ceilO=new THREE.Mesh(new THREE.PlaneGeometry(OW,OD), mat(0xeeece6,0.95));
-  ceilO.rotation.x=Math.PI/2; ceilO.position.set(OCX,OH,OCZ);
-  ceilO.receiveShadow=true; ceilO.castShadow=true; ceilO.material.shadowSide=THREE.DoubleSide; scene.add(ceilO);
-  { const beamMat=mat(0xd6d2cc,0.85), bt=0.05, bh=0.05;
-    for(let x=X0+1; x<X1; x+=1.4){ const b=new THREE.Mesh(new THREE.BoxGeometry(bt,bh,OD),beamMat); b.position.set(x,OH-bh/2,OCZ); b.receiveShadow=true; scene.add(b);}
-    for(let z=Z0+1; z<Z1; z+=1.4){ const b=new THREE.Mesh(new THREE.BoxGeometry(OW,bh,bt),beamMat); b.position.set(OCX,OH-bh/2,z); b.receiveShadow=true; scene.add(b);} }
-  // 2 灯板（发光罩）+ 点光源
-  [[-1.6,20.6],[1.6,20.6],[-1.6,22.6],[1.6,22.6]].forEach(([lx,lz],i)=>{
-    const pmat=new THREE.MeshStandardMaterial({color:0xf6f4ee,emissive:0xf3efe4,emissiveIntensity:0.9,roughness:0.7});
-    const panel=new THREE.Mesh(new THREE.PlaneGeometry(1.1,0.5), pmat);
-    panel.rotation.x=Math.PI/2; panel.position.set(lx,OH-0.06,lz); scene.add(panel);
-    officePanels.push(pmat);
-    if(i===0||i===3){ const pl=new THREE.PointLight(0xf5f3ee, 3.4, 8, 2); pl.position.set(lx,OH-0.3,lz); pl.castShadow=false; scene.add(pl); officeLights.push({light:pl,base:3.4}); } // 4→2 盏点光（对角覆盖），减灯提帧
-  });
-  // （原窗侧假 SpotLight 已移除：西墙清窗后由真实太阳从 -x 射入，产生随时段移动的真实窗光斑，与教室一致）
-
-  // ══ 工位隔断 + 办公椅 ══════════════════════════════════════════════════════
-  const deskTopMat=mat(0xeceae2,0.5), pedMat=mat(0xcbb083,0.6);
-  const woodPanelMat=mat(0xbf9f68,0.65), greenBandMat=mat(0x7cb342,0.45);
-  // 磨砂玻璃：改用廉价 MeshStandard 半透（去掉 transmission → 不再触发昂贵的透射渲染 pass，提帧关键）
-  const glassMat=new THREE.MeshStandardMaterial({color:0xe2ebee,roughness:0.4,transparent:true,opacity:0.4,metalness:0});
-  const monMat=mat(0x18181a,0.5), baseMat=mat(0x2a2a2c,0.5,0.4);
-  const meshBlue=mat(0x274a86,0.7), meshBlack=mat(0x1c1c1e,0.7);
-
-  // 家具网格：castShadow/receiveShadow=false —— 办公室已被四壁+实顶封住全局太阳，室内唯一光源
-  // 是不投影的点光/SpotLight → 家具无需进阴影贴图，省大量 shadow draw call（提帧关键）。
-  function pm(g,geo,m,x,y,z,rx=0,ry=0,rz=0){ const me=new THREE.Mesh(geo,m); me.position.set(x,y,z); me.rotation.set(rx,ry,rz); me.castShadow=false; me.receiveShadow=false; g.add(me); return me; }
-
-  function chair(g, ox, oz, seatMat){
-    const cg=new THREE.Group(); cg.position.set(ox,0,oz); g.add(cg);
-    // 五星脚 + 滚轮
-    for(let i=0;i<5;i++){ const a=i*2*Math.PI/5;
-      pm(cg,new THREE.BoxGeometry(0.05,0.03,0.30),baseMat, Math.sin(a)*0.14,0.05,Math.cos(a)*0.14, 0,a,0);
-      pm(cg,new THREE.SphereGeometry(0.03,8,8),baseMat, Math.sin(a)*0.27,0.03,Math.cos(a)*0.27);
-    }
-    pm(cg,new THREE.CylinderGeometry(0.032,0.032,0.42,12),baseMat, 0,0.26,0);
-    pm(cg,new THREE.BoxGeometry(0.48,0.09,0.46),seatMat, 0,0.48,0);           // 座
-    pm(cg,new THREE.BoxGeometry(0.46,0.54,0.06),seatMat, 0,0.80,-0.22,-0.14); // 靠背(网面)微仰
-    [-1,1].forEach(s=>{ pm(cg,new THREE.BoxGeometry(0.05,0.05,0.34),baseMat, s*0.27,0.62,-0.02);
-      pm(cg,new THREE.BoxGeometry(0.04,0.16,0.04),baseMat, s*0.27,0.55,0.06); });
-  }
-
-  // 单个工位：桌 + 后隔断(木+绿条+磨砂玻璃) + 侧隔断 + 显示器 + 椅
-  function workstation(px, pz, ry, seatMat, pedSide){
-    const g=new THREE.Group(); g.position.set(px,0,pz); g.rotation.y=ry; scene.add(g);
-    // 桌面
-    pm(g,new THREE.BoxGeometry(1.2,0.04,0.6),deskTopMat, 0,0.74,0);
-    // 柜脚(一侧) + 另一侧板腿
-    pm(g,new THREE.BoxGeometry(0.42,0.70,0.55),pedMat, pedSide*0.34,0.35,0);
-    pm(g,new THREE.BoxGeometry(0.04,0.70,0.55),pedMat, -pedSide*0.56,0.35,0);
-    pm(g,new THREE.BoxGeometry(1.16,0.44,0.03),pedMat, 0,0.50,-0.27);          // 挡板(occupant 侧)
-    // 后隔断(+z 侧，靠窗/中脊)
-    pm(g,new THREE.BoxGeometry(1.24,1.0,0.04),woodPanelMat, 0,0.50,0.32);
-    pm(g,new THREE.BoxGeometry(1.24,0.10,0.05),greenBandMat, 0,1.05,0.32);
-    pm(g,new THREE.BoxGeometry(1.24,0.28,0.02),glassMat, 0,1.24,0.32);
-    // 侧隔断(+x 侧)
-    pm(g,new THREE.BoxGeometry(0.04,1.0,0.66),woodPanelMat, 0.62,0.50,0.0);
-    pm(g,new THREE.BoxGeometry(0.05,0.10,0.66),greenBandMat, 0.62,1.05,0.0);
-    pm(g,new THREE.BoxGeometry(0.02,0.28,0.66),glassMat, 0.62,1.24,0.0);
-    // 显示器(面向 occupant, -z)
-    pm(g,new THREE.BoxGeometry(0.52,0.32,0.03),monMat, 0,0.98,0.20);
-    pm(g,new THREE.BoxGeometry(0.06,0.14,0.05),monMat, 0,0.83,0.24);
-    pm(g,new THREE.BoxGeometry(0.22,0.02,0.14),monMat, 0,0.76,0.24);
-    // 椅（occupant 侧 -z）
-    chair(g, 0, -0.52, seatMat);
-  }
-
-  // 两个 pod（左/右），各 2×2 背靠背，中间中脊；中间留过道通往窗户
-  // 全体朝 -x（挡板/隔断朝向西窗）：2 列(x) × 4 行(z)，占用者面向窗户
-  const colXo=[-2.4, 0.2];                    // 列1贴窗、列2居中
-  const rowZo=[19.5, 20.9, 22.3, 23.7];       // 4 行（pitch 1.4）
-  let wsi=0;
-  colXo.forEach((cx,ci)=> rowZo.forEach((cz,ri)=>{
-    if(ri===1) return;   // 去掉两列的第2行(z≈20.9)两个工位 → 与门(z≈20.2)对齐的东西向过道
-    workstation(cx, cz, -Math.PI/2, (wsi%2 ? meshBlue : meshBlack), ci===0?1:-1);
-    wsi++;
-  }));
-})();
-
-// ══ 连廊：把走廊(x∈[7,8.9])向西接到办公室东墙门(x=4)，形成 L 形通道 ═══════════════════
-// 复用走廊材质(emissive 自发光+走廊灯电平驱动)，灯挂进 corrLampLights/corrGlowMats → 受「走廊灯」控制。
-(function officeCorridorLink(){
-  const OX1=4;                        // 办公室东墙 x（与 office X1 一致）
-  const cz0=19.0, cz1=CORR_Z1;        // 连廊 z 跨度（含门 z=OFF_DOORZ=20.2；南接走廊尽头 21.5）
-  const cx0=OX1, cx1=CORR_X0;          // x∈[4,7]
-  const ccx=(cx0+cx1)/2, ccz=(cz0+cz1)/2, cw=cx1-cx0, cl=cz1-cz0;
-  const S=(m)=>{ m.receiveShadow=true; scene.add(m); return m; };
-  // 地面 / 吊顶
-  { const m=new THREE.Mesh(new THREE.PlaneGeometry(cw,cl),corrFloorMat); m.rotation.x=-Math.PI/2; m.position.set(ccx,0,ccz); S(m); }
-  { const m=new THREE.Mesh(new THREE.PlaneGeometry(cw,cl),corrCeilMat);  m.rotation.x=Math.PI/2;  m.position.set(ccx,RH-0.04,ccz); m.castShadow=true; S(m); }
-  // 北墙(z=cz0) / 南墙(z=cz1)
-  { const m=new THREE.Mesh(new THREE.PlaneGeometry(cw,RH),corrWallMat); m.position.set(ccx,RH/2,cz0); m.castShadow=true; S(m); }
-  { const m=new THREE.Mesh(new THREE.PlaneGeometry(cw,RH),corrWallMat); m.rotation.y=Math.PI; m.position.set(ccx,RH/2,cz1); m.castShadow=true; S(m); }
-  // 走廊西墙填补段(x=CORR_X0=7, z∈[18,cz0])：教室右墙止于 z=18 → 补到连廊口，封住此段走廊西侧
-  { const m=new THREE.Mesh(new THREE.PlaneGeometry(cz0-18,RH),corrWallMat); m.rotation.y=Math.PI/2; m.position.set(CORR_X0,RH/2,(18+cz0)/2); m.castShadow=true; S(m); }
-  // 连廊照明：1 盏吸顶灯板 + 点光（挂进走廊灯系统）
-  const pmat=new THREE.MeshStandardMaterial({color:0xf6f8ff,emissive:0xeaf0ff,emissiveIntensity:0.9,roughness:0.4});
-  corrGlowMats.push({m:pmat,baseEmis:0.1,emisMax:2.4,isLamp:true});
-  const panel=new THREE.Mesh(new THREE.BoxGeometry(1.0,0.05,0.16),pmat); panel.position.set(ccx,RH-0.10,ccz); scene.add(panel);
-  const pl=new THREE.PointLight(0xdbe6f2,0,4.6,2); pl.position.set(ccx,RH-0.28,ccz); scene.add(pl); corrLampLights.push(pl);
-})();
-
 // ── AIR CONDITIONER — 讲台侧左角立式柜机 ──────────────────────────────────────
 // 落地柜机：贴左墙(-X)，宽面朝向教室内部(+X)，从地面起立。
 // 占地约 0.30(进深/X) × 0.45(沿墙/Z)，高 1.80。
@@ -7716,7 +7659,7 @@ const rowSpacing=2.0;
 const colX=[-6.10, -4.35,-3.05, 0,0.625, 3.05,4.35, 6.10]; // 保留列(下标0/2/3/5/7)等距：-6.10/-3.05/0/3.05/6.10(相邻间距均=3.05)
 const startZ=-RD/2+6+5.0;
 
-const deskMat=mat(0xcdb088,0.6,0,deskTex,deskNormal,deskRough); // 0x8a6838→0xcdb088：配合抬亮的木纹贴图，桌色改为浅暖橡木(贴图×桌色不再相乘成黑)，桌面落出明亮木质
+const deskMat=mat(0xcdb088,0.6,0,deskTex); // 提帧：去掉法线/粗糙度贴图(每像素少 2 次采样+法线切线运算)，只留木纹颜色贴图；外观基本不变
 const legMat2=mat(0x3a3a3a,0.7,0.2);                            // 0x303030→0x3a3a3a：桌椅腿同步微抬，避免腿仍是纯黑细条
 const chairMat=mat(0x7c7c88,0.55);                              // 0x4a4a55→0x7c7c88：上一轮 0x4a4a55 线性仍仅≈0.08 偏黑；再抬到中调蓝灰(线性≈0.20)，椅子明确受光、不再黑团
 
@@ -7744,7 +7687,7 @@ const douMat=mat(0x6a4f28,0.70,0,deskTex);   // 0x55401f→0x6a4f28：随桌面�
 const steelMat = mat(0xc7cbcf, 0.36, 0.78);           // 银色金属圆管（powder-coated 钢管，微反光）
 const footMat  = mat(0x27272b, 0.78, 0.0);            // 管脚橡胶套（深灰）
 const ventMat  = mat(0x241f19, 0.85, 0.0);            // 书箱透气孔（暗色内凹槽）
-const chairWoodMat = mat(0xc9a877,0.52,0,deskTex,deskNormal,deskRough); // 椅座/靠背：暖木色弯合板（配套课桌）
+const chairWoodMat = mat(0xc9a877,0.52,0,deskTex); // 椅座/靠背：暖木色弯合板；提帧：同桌面去掉法线/粗糙度贴图
 // 圆管几何（固定长度、40 套复用；水平管在几何层预旋转到 X/Z 轴向）
 const TUBE_R = 0.016;
 const dLegTubeGeo = new THREE.CylinderGeometry(TUBE_R,TUBE_R,0.72,10);                          // 桌·竖腿(Y 向)
@@ -8151,16 +8094,6 @@ function syncCorridor(){
   document.getElementById('corrIntv').textContent = bri.toFixed(2);
 }
 
-// 办公室灯：开关 + 亮度（缩放 officeLights 基准强度 + 灯板 emissive）
-function syncOffice(){
-  const on  = document.getElementById('offOn').checked;
-  const bri = +document.getElementById('offInt').value;
-  officeLights.forEach(o => o.light.intensity = on ? o.base * bri : 0);
-  officePanels.forEach(m => m.emissiveIntensity  = on ? 0.9 * bri : 0.0);
-  const od = document.getElementById('oDot');
-  if(od) od.style.opacity = on ? '1' : '0.3';
-  document.getElementById('offIntv').textContent = bri.toFixed(2);
-}
 
 // ── Light marker (main window light only, draggable) ──────────────────────────
 function makeMarker(color){
@@ -8204,86 +8137,18 @@ updateSunOrb();
 // 窗外天空/补光/尘埃/光柱)全部随组升到二层。
 const wingAUpper = new THREE.Group();
 {
-  const KEEP = new Set([ambientLight, hemiLight, mainLight, mainLight.target, moonLight, moonLight.target, sunOrb]);
+  const KEEP = new Set([ambientLight, hemiLight, mainLight, mainLight.target, moonLight, moonLight.target, sunOrb, precipGroup]);
   for(const o of [...scene.children]){ if(!KEEP.has(o)) wingAUpper.add(o); }
-  wingAUpper.position.y = FLOOR_LIFT;   // 整组升到二层
+  wingAUpper.position.y = 0;   // 单层：教室落地（原 FLOOR_LIFT 抬升已取消）
   scene.add(wingAUpper);
   renderer.shadowMap.needsUpdate = true; // 教室位置变了，触发一次阴影重渲(范围校正见后续任务)
 }
 
 // ══ 阶段1：横翼A 双层楼板/一层地面/屋顶 ═══════════════════════════════════════════
-// 教室已在二层(Y=FLOOR_LIFT)，给它垫层间楼板、补一层地面与屋顶，让"双层"结构立起来。
+// 教室已落地(Y=0)，仅在层高之上补一层屋顶挡顶部直射太阳。
 {
   const cx=(WA_X0+WA_X1)/2, cz=(WA_Z0+WA_Z1)/2, W=WA_X1-WA_X0, D=WA_Z1-WA_Z0;
-  shellBox(cx, -0.15,        cz, W, 0.30,   D); // 一层地面(顶面 Y=0)
-  shellBox(cx, (RH + FLOOR_LIFT-0.03)/2, cz, W, (FLOOR_LIFT-0.03)-RH, D); // 层间楼板(顶面 3.82，比二层地板 3.85 低 3cm，防 z-fighting 闪烁)
-  shellBox(cx, L2_Y1+0.25,   cz, W, 0.30,   D); // 屋顶(底面 7.45，比二层吊顶 7.35 高 10cm，防天花板 z-fighting 闪烁)
-}
-
-// ══ 阶段1：竖翼B 双层外壳（一层将放报告厅、二层毛坯）——从横翼A黑板前端沿 -X 伸出 ══
-{
-  const cx=(WB_X0+WB_X1)/2, cz=(WB_Z0+WB_Z1)/2, W=WB_X1-WB_X0, D=WB_Z1-WB_Z0;
-  const H=L2_Y1;                               // 双层通高外墙
-  shellBox(cx, -0.15,        cz, W, 0.30,   D); // 一层地面
-  shellBox(cx, RH+SLAB_T/2,  cz, W, SLAB_T, D); // 层间楼板
-  shellBox(cx, L2_Y1+0.15,   cz, W, 0.30,   D); // 屋顶
-  shellBox(WB_X0, H/2, cz, 0.30, H, D);         // 西外墙(x=WB_X0)
-  shellBox(cx, H/2, WB_Z0, W, H, 0.30);         // 北外墙(z=WB_Z0=-22)
-  // 南面(z=WB_Z1=-4)不建实墙 → 留给报告厅商场式玻璃大门(见报告厅内部)
-  // 东侧(x=WB_X1=-7)与横翼A相接处不建墙 → 两翼内部连通(报告厅门/连通口见阶段3)
-}
-
-// ══ 阶段3+4+5：报告厅内部(竖翼B一层) —— 舞台/LED 朝西、阶梯座椅带扶手、南面商场式玻璃大门 ══
-{
-  const hcz = (WB_Z0+WB_Z1)/2;   // 报告厅中心 z = -13
-  const ceilY = RH - 0.15;
-  // 顶部照明：6 灯板 + 4 点光
-  const panelMat = new THREE.MeshStandardMaterial({ color:0xf6f8ff, emissive:0xeaf0ff, emissiveIntensity:0.9, roughness:0.4 });
-  for(const lx of [-19,-11]) for(const lz of [-19,-13,-7]){
-    const p=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.12,1.4),panelMat); p.position.set(lx,ceilY,lz); scene.add(p);
-  }
-  for(const lx of [-19,-11]) for(const lz of [-17,-9]){
-    const pl=new THREE.PointLight(0xf3f6ff,1.0,15,2); pl.position.set(lx,ceilY-0.3,lz); pl.castShadow=false; scene.add(pl);
-  }
-  // 舞台(西端，抬高) + LED 大屏(西墙内侧朝东，与舞台相当) + 讲台(移到舞台北侧)
-  shellBox(-21, 0.20, hcz, 4, 0.40, 16, new THREE.MeshStandardMaterial({color:0x5b4a38,roughness:0.85}));
-  const led=new THREE.Mesh(new THREE.BoxGeometry(0.15,3.3,14), new THREE.MeshStandardMaterial({color:0x10182c,emissive:0x2b52a0,emissiveIntensity:0.85,roughness:0.25}));
-  led.position.set(-22.7, 2.15, hcz); scene.add(led);
-  const pod=new THREE.Mesh(new THREE.BoxGeometry(0.6,1.1,1.3), new THREE.MeshStandardMaterial({color:0x8a6a44,roughness:0.55,metalness:0.1}));
-  pod.position.set(-20.4, 0.95, -20.0); pod.castShadow=true; scene.add(pod);
-  // 阶梯座椅(东侧朝西看舞台；后排东、高，前排西、低) —— InstancedMesh 合批(座/靠背/扶手)
-  const seatMat=new THREE.MeshStandardMaterial({color:0x33415a,roughness:0.7});
-  const stepMat=new THREE.MeshStandardMaterial({color:0x8b8880,roughness:0.9});
-  const seatGeo=new THREE.BoxGeometry(0.5,0.12,0.5), backGeo=new THREE.BoxGeometry(0.1,0.5,0.5), armGeo=new THREE.BoxGeometry(0.42,0.26,0.08);
-  const rowsX=[], colsZ=[];
-  for(let x=-18; x<=-8.999; x+=1.15) rowsX.push(x);              // 排(沿x)更密
-  for(let z=-20; z<=-5.999; z+=1.05){ if(Math.abs(z-hcz)<0.65) continue; colsZ.push(z); } // 列(沿z)更密，中央过道
-  const N=rowsX.length*colsZ.length;
-  const seatI=new THREE.InstancedMesh(seatGeo,seatMat,N), backI=new THREE.InstancedMesh(backGeo,seatMat,N), armI=new THREE.InstancedMesh(armGeo,seatMat,N*2);
-  seatI.castShadow=backI.castShadow=armI.castShadow=false;      // 室内(太阳照不进)不投影 → 省阴影渲染
-  const M=new THREE.Matrix4(); let i=0, a=0;
-  const y=0.45;                                                  // 平地(暂不做阶梯台阶)
-  rowsX.forEach((x)=>{
-    for(const z of colsZ){
-      M.makeTranslation(x, y, z);           seatI.setMatrixAt(i,M);
-      M.makeTranslation(x+0.25, y+0.28, z); backI.setMatrixAt(i,M);  // 靠背在东侧(背后)，人朝西
-      M.makeTranslation(x, y+0.14, z-0.27); armI.setMatrixAt(a++,M); // 扶手×2
-      M.makeTranslation(x, y+0.14, z+0.27); armI.setMatrixAt(a++,M);
-      i++;
-    }
-  });
-  seatI.instanceMatrix.needsUpdate=backI.instanceMatrix.needsUpdate=armI.instanceMatrix.needsUpdate=true;
-  scene.add(seatI); scene.add(backI); scene.add(armI);
-  // 南面(z=WB_Z1)商场式玻璃大门：4 扇玻璃 + 竖框 + 门楣
-  const glassMat=new THREE.MeshStandardMaterial({color:0xbcd8f0,transparent:true,opacity:0.30,roughness:0.08,emissive:0x1a2a3a,emissiveIntensity:0.05});
-  const frameMat=new THREE.MeshStandardMaterial({color:0x2a2f36,roughness:0.5,metalness:0.6});
-  const doorH=2.7, dz=WB_Z1;
-  for(let x=-21; x<=-11.999; x+=3.0){
-    const g=new THREE.Mesh(new THREE.BoxGeometry(2.7,doorH,0.08),glassMat); g.position.set(x, doorH/2, dz); scene.add(g);
-    const fr=new THREE.Mesh(new THREE.BoxGeometry(0.14,doorH,0.12),frameMat); fr.position.set(x-1.45, doorH/2, dz); scene.add(fr);
-  }
-  { const fr=new THREE.Mesh(new THREE.BoxGeometry(0.14,doorH,0.12),frameMat); fr.position.set(-10.55, doorH/2, dz); scene.add(fr); } // 最东竖框
-  { const top=new THREE.Mesh(new THREE.BoxGeometry(12.2,0.18,0.14),frameMat); top.position.set(-15.5, doorH+0.09, dz); scene.add(top); } // 门楣
+  shellBox(cx, RH+0.25,   cz, W, 0.30,   D); // 屋顶(底面比吊顶高 10cm，防天花板 z-fighting 闪烁)
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -8374,9 +8239,18 @@ document.getElementById('ceilOn').addEventListener('change',()=>{sync();markCust
 document.getElementById('corrOn').addEventListener('change',()=>{syncCorridor();markCustom();});
 document.getElementById('corrInt').addEventListener('input',()=>{syncCorridor();markCustom();});
 syncCorridor();
-document.getElementById('offOn').addEventListener('change',()=>{syncOffice();markCustom();});
-document.getElementById('offInt').addEventListener('input',()=>{syncOffice();markCustom();});
-syncOffice();
+
+// 窗外天气：切换所有朝外窗背景板的贴图（静态；仅换背景，不动室内光）
+function setWeather(kind){
+  if(!['clear','cloudy','rain','snow'].includes(kind)) return;
+  currentWeather = kind;
+  scene.background = envTexFor(kind);   // equirect 环境图（懒加载）
+  const L=WX_LIGHT[kind]; wxSun=L.sun; wxFillMul=L.fill; wxSunGrey=L.sunGrey; wxHemiGrey=L.hemiGrey;
+  renderer.toneMappingExposure = 1.5 * L.exp;   // 阴雨压暗曝光
+  setPrecip(kind);                              // 雨/雪下落粒子
+  document.querySelectorAll('.wx-btn').forEach(b => b.classList.toggle('on', b.dataset.wx===kind));
+}
+setWeather(currentWeather);
 
 // ── Presets ───────────────────────────────────────────────────────────────────
 const PRESETS={
@@ -8420,16 +8294,16 @@ function applyPreset(k){
   const pc = (k==='night') ? {r:0.55,g:0.66,b:0.95} : {r:1.0,g:0.97,b:0.90};
   winPatches.forEach(p=>p.material.color.setRGB(pc.r, pc.g, pc.b));
   winShafts.forEach(s=>s.material.color.setRGB(pc.r, pc.g, pc.b));
-  // 窗外景物明暗（修复：静态预设此前从不更新 extMats，夜间窗外仍是满亮白天纹理）
-  const extB = { morning:0.78, noon:1.0, dusk:0.42, night:0.06 }[k];
+  // 窗外天气背景亮度随昼夜（extBg 现为 toneMapped:false → color 直接当 0..1 亮度乘数）
+  const extB = { morning:0.85, noon:1.0, dusk:0.55, night:0.15 }[k];
   if(extB !== undefined){
-    const w = k==='dusk'?0.5 : k==='morning'?0.3 : k==='night'?-0.2 : 0;  // 暖/冷偏移
-    // 窗外天空色（压低基色，过曝光后为天蓝、不发白）：白天蓝、晨昏偏暖、夜暗蓝
+    const w = k==='dusk'?0.35 : k==='morning'?0.15 : k==='night'?-0.15 : 0;  // 暖/冷偏移
     extMats.forEach(em => em.color.setRGB(
-      (0.03 + extB*0.08) * (1 + w*0.5),
-      (0.06 + extB*0.17) * (1 + w*0.1),
-      (0.13 + extB*0.31) * (1 - w*0.3)
+      Math.min(1, extB * (1 + w*0.35)),
+      extB,
+      Math.min(1, extB * (1 - w*0.45))
     ));
+    scene.backgroundIntensity = extB * 0.45;   // 窗外天空随昼夜明暗（*0.45 压暗，防曝光/bloom冲白）
   }
   // Hemisphere bounce: strong at noon, off at night
   hemiTarget = k==='noon' ? 0.55 : k==='morning' ? 0.10 : k==='dusk' ? 0.18 : 0.0; // Task6: 物理灯+提亮，天光间接补光上调(noon→0.55 软化吊顶/上半墙/桌底，明亮通透)；清晨仍较低(→0.10)保丁达尔光柱；夜=0(再乘 envGate 双重门控)
@@ -8444,7 +8318,7 @@ function applyPreset(k){
   moonTarget = k==='night' ? 0.28 : 0.0;
   sync();
   document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('on'));
-  document.querySelector(`[onclick="applyPreset('${k}')"]`).classList.add('on');
+  { const _b=document.querySelector(`[onclick="applyPreset('${k}')"]`); if(_b) _b.classList.add('on'); } // null 保护：正午/傍晚/深夜按钮已删，经键盘/URL 触发这些预设时不报错
   descEl.textContent=p.desc;descEl.style.opacity='1';
   if(k!=='custom')setTimeout(()=>descEl.style.opacity='0',3500);
 }
@@ -8674,7 +8548,7 @@ addEventListener('pointermove', e=>{ if(e.buttons) _markInteract(); }, true);
 addEventListener('wheel', _markInteract, {capture:true, passive:true});
 addEventListener('touchmove', _markInteract, {capture:true, passive:true});
 addEventListener('keydown', _markInteract, true);
-setAA(document.getElementById('aaOn').checked); // 初始应用抗锯齿(默认开)
+setAA(false); // 抗锯齿功能已取消：固定关闭 MSAA
 
 let bloomStrength = 0.45;   // 0.9→0.45：辉光减半，去掉亮窗周围那层发白光晕（可调 0..1）
 function drawBloom(){
@@ -8847,16 +8721,18 @@ if(driftOn){
   // 直射强时压低天光 → 暗部更暗、阴影更分明，突出"光与影"。
   const moonGlow = (1 - dayLit) * 0.05;                 // 夜晚保留极弱冷调月光环境，避免死黑或残留暖色
   // 正午直射被屋顶挡住→改由漫射天光把屋子照亮（亮而无影）；低太阳天光弱、让直射长影唱主角。
-  hemiTarget = Math.max(moonGlow, skyLevel * (0.22 + 0.46 * sunHeight01)); // 间接天光补光适度上调(0.18+0.42→0.22+0.46)→软化吊顶/上半墙/暗角；仍乘 envGate(渲染循环)→夜间归零
+  hemiTarget = Math.max(moonGlow, skyLevel * (0.22 + 0.46 * sunHeight01)) * wxFillMul; // 间接天光；*wxFillMul：阴/雨/雪抬高漫射（无直射时靠它照亮）
   baseAmbient = 0.02 + skyLevel * (0.05 + 0.15 * sunHeight01);  // 正午≈0.22，晨昏≈0.07
   // 天光颜色：晨昏暖金、正午冷蓝、夜晚冷月白（warmK 夜间已为 0）
   hemiLight.color.setRGB(0.70 + warmK*0.30, 0.82 - warmK*0.06, 1.0 - warmK*0.52);
-  // 窗外天空色（压低基色，过曝光后为天蓝、不发白）——与 applyPreset 同配方
+  // 窗外天气背景亮度随昼夜（toneMapped:false → 0..1 亮度乘数；夜0.15→正午≈1.0）——与 applyPreset 同曲线
+  const extB = Math.min(1, 0.15 + skyLevel * (0.30 + 0.55*sunHeight01));
   extMats.forEach(em => em.color.setRGB(
-    (0.03 + skyLevel*0.08) * (1 + warmK*0.5),
-    (0.06 + skyLevel*0.17) * (1 + warmK*0.1),
-    (0.13 + skyLevel*0.31) * (1 - warmK*0.3)
+    Math.min(1, extB * (1 + warmK*0.30)),
+    extB,
+    Math.min(1, extB * (1 - warmK*0.35))
   ));
+  scene.backgroundIntensity = extB * 0.45;   // 窗外天空随昼夜明暗（*0.45 压暗，防曝光/bloom冲白）
   
     // ── Simulated clock time ──────────────────────────────────────────────────
     // Map dayPhase 0→1 to 05:30→22:30 (17 小时窗口，覆盖到晚自习)
@@ -9082,11 +8958,9 @@ if(driftOn){
     renderer.shadowMap.needsUpdate = true;
     _lastSunP.copy(mainLight.position); _lastSunT.copy(mainLight.target.position);
   }
-  // 提帧⑤：办公室在后墙(z=16)后方——相机处于教室侧(z<13)时被实墙完全遮挡，整组不绘制。
-  // 可见性切换时刷新一次阴影：进办公室要让办公室四壁重新进阴影贴图挡住太阳(否则残留旧图会漏光)。
-  { const offVis = camera.position.z > 13;
-    if(offVis !== officeGroup.visible){ officeGroup.visible = offVis; renderer.shadowMap.needsUpdate = true; } }
 
+  applyWeatherLighting();  // 天气→弱化直射/冷灰化（须在 sync 之后、渲染之前）
+  updatePrecip();          // 雨/雪下落
   composer.render();
   drawBloom(); // 亮部辉光叠层（每帧，避免相机移动时拖影）
 
@@ -9157,7 +9031,6 @@ function setAspect(v){
 document.addEventListener('keydown', e=>{
   if(e.key==='Tab'){e.preventDefault();togglePanel();}
   if(e.key==='Escape' && settingsOpen){ toggleSettings(false); }  // Esc 关闭设置浮层
-  if(e.key===' '){e.preventDefault(); driftOn?togglePlay():toggleDrift();} // 空格：开启时间轴 / 播放暂停
   if(e.key==='1') applyPreset('morning');
   if(e.key==='2') applyPreset('noon');
   if(e.key==='3') applyPreset('dusk');
@@ -9165,15 +9038,13 @@ document.addEventListener('keydown', e=>{
 });
 
 // ── 固定机位：数字键切到预设广角视角（相机由全局 theta/phi/camR/panX/panZ/panY + 每机位 fov 驱动）──
-// 教室套已抬到二层(+FLOOR_LIFT=3.85)，原教室机位 panY 相应上移；新增 '0' 整栋外观。
+// 单层落地教室：机位 panY 已从二层高度下移 3.85；'0' 改为教室单体外观。
 const CAM_VIEWS = {
-  '5': { name:'全景概览',    fov:68, theta:-0.22,   phi:0.09, camR:11.0, panX: 0.0, panZ: 1.0, panY: 4.15 },
-  '6': { name:'教师视角',    fov:72, theta:Math.PI, phi:0.03, camR: 6.5, panX: 0.0, panZ: 3.0, panY: 4.00 },
-  '7': { name:'后→前 广角', fov:78, theta:0.0,     phi:0.03, camR:11.5, panX: 0.0, panZ: 0.0, panY: 3.75 },
-  '8': { name:'办公室视角',  fov:80, theta:1.5708,  phi:0.10, camR: 4.8, panX:-1.5, panZ:21.5, panY: 4.55 }, // 二层后方办公室
-  '9': { name:'侧窗全景',    fov:70, theta:2.20,    phi:0.14, camR: 8.5, panX:-2.0, panZ: 4.0, panY: 4.15 },
-  '0': { name:'整栋外观',    fov:55, theta:-0.60,   phi:0.45, camR:45.0, panX:-3.0, panZ: 4.0, panY: 2.00 }, // L形俯瞰(教室二层+竖翼B)
-  hall:{ name:'报告厅',      fov:76, theta:1.5708,  phi:0.12, camR: 9.5, panX:-15.0, panZ:-13.0, panY: 0.40 }, // 竖翼B一层报告厅：观众区朝西看舞台/LED(面板按钮触发)
+  '5': { name:'全景概览',    fov:68, theta:-0.22,   phi:0.09, camR:11.0, panX: 0.0, panZ: 1.0, panY: 0.30 },
+  '6': { name:'教师视角',    fov:72, theta:Math.PI, phi:0.03, camR: 6.5, panX: 0.0, panZ: 3.0, panY: 0.15 },
+  '7': { name:'后→前 广角', fov:78, theta:0.0,     phi:0.03, camR:11.5, panX: 0.0, panZ: 0.0, panY: -0.10 },
+  '9': { name:'侧窗全景',    fov:70, theta:2.20,    phi:0.14, camR: 8.5, panX:-2.0, panZ: 4.0, panY: 0.30 },
+  '0': { name:'教室外观',    fov:55, theta:-0.60,   phi:0.35, camR:26.0, panX: 0.0, panZ: 3.0, panY: 0.80 }, // 教室单体外观俯瞰
 };
 const camLabel = document.createElement('div');
 camLabel.style.cssText = 'position:fixed;left:50%;top:64px;transform:translateX(-50%);padding:6px 14px;background:rgba(0,0,0,0.55);color:#fff;font:14px/1.4 system-ui,sans-serif;letter-spacing:1px;border-radius:6px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:60;';

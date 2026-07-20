@@ -257,10 +257,120 @@ input[type=range].r:hover::-webkit-slider-thumb{transform:scale(1.25);box-shadow
   z-index:4;pointer-events:none;display:block;
   mix-blend-mode:screen;
 }
+/* ══ 开场封面 · Title screen ═══════════════════════════════════════════ */
+#cover{
+  position:fixed; inset:0; z-index:9000;
+  display:flex; flex-direction:column; justify-content:center;
+  padding:clamp(28px,6vw,84px);
+  color:var(--warm); cursor:default;
+  background:
+    radial-gradient(120% 90% at 15% 8%, rgba(212,168,75,.17), transparent 52%),
+    radial-gradient(92% 82% at 93% 97%, rgba(136,170,255,.11), transparent 58%),
+    linear-gradient(rgba(8,7,5,.40), rgba(6,6,9,.66));
+  -webkit-backdrop-filter:blur(22px) saturate(1.06) brightness(.68);
+  backdrop-filter:blur(22px) saturate(1.06) brightness(.68);
+  transition:opacity .9s var(--ease), -webkit-backdrop-filter .9s var(--ease), backdrop-filter .9s var(--ease);
+  overflow:hidden;
+}
+#cover.leaving{ opacity:0; pointer-events:none;
+  -webkit-backdrop-filter:blur(0) brightness(1); backdrop-filter:blur(0) brightness(1); }
+#cover::after{ content:""; position:absolute; inset:0; pointer-events:none;
+  background:radial-gradient(132% 112% at 50% 44%, transparent 56%, rgba(0,0,0,.52)); }
+#cover .cv{ position:relative; z-index:1; max-width:1120px; }
+
+/* staggered intro */
+#cover .in{ opacity:0; transform:translateY(18px);
+  transition:opacity .85s var(--ease), transform .85s var(--ease); }
+#cover.ready .in{ opacity:1; transform:none; }
+#cover .d1{ transition-delay:.04s } #cover .d2{ transition-delay:.13s }
+#cover .d3{ transition-delay:.26s } #cover .d4{ transition-delay:.40s }
+#cover .d5{ transition-delay:.54s } #cover .d6{ transition-delay:.66s }
+
+.cv-eyebrow{ font-family:ui-monospace,'SF Mono',Menlo,monospace;
+  font-size:clamp(11px,1.05vw,14px); letter-spacing:.4em; text-transform:uppercase;
+  color:var(--amber); margin-bottom:clamp(14px,2vw,26px); }
+.cv-eyebrow .sep{ color:var(--t4); margin:0 .55em; }
+.cv-title{ font-family:Georgia,'Times New Roman',serif; font-style:italic; font-weight:400;
+  font-size:clamp(54px,12.5vw,172px); line-height:.88; letter-spacing:-.012em; color:var(--warm); }
+.cv-title .amp{ color:var(--amber); font-style:italic; }
+.cv-tagline{ margin-top:clamp(16px,2vw,30px); max-width:40ch; line-height:1.5;
+  font-size:clamp(15px,1.55vw,23px); font-weight:300; letter-spacing:.005em; color:var(--t1); }
+.cv-tagline .en{ color:var(--t2); }
+
+.cv-choose{ margin-top:clamp(30px,4.4vw,62px); }
+.cv-choose .lbl{ font-family:ui-monospace,'SF Mono',Menlo,monospace;
+  font-size:clamp(10px,1vw,12px); letter-spacing:.34em; text-transform:uppercase;
+  color:var(--t3); margin-bottom:15px; }
+.cv-hours{ display:flex; gap:clamp(8px,1vw,14px); flex-wrap:wrap; }
+.cv-hour{ position:relative; font:inherit; cursor:pointer; text-align:left;
+  background:var(--chip-bg); border:1px solid var(--line); border-radius:var(--radius);
+  color:var(--t1); padding:12px 22px 13px; backdrop-filter:var(--blur);
+  display:flex; flex-direction:column; gap:3px;
+  transition:border-color var(--dur) var(--ease), background var(--dur) var(--ease), transform var(--dur) var(--ease); }
+.cv-hour:hover{ background:var(--chip-bg-hi); border-color:var(--line-hi); transform:translateY(-2px); }
+.cv-hour .zh{ font-size:clamp(15px,1.35vw,19px); letter-spacing:.02em; }
+.cv-hour .en{ font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:10px;
+  letter-spacing:.2em; text-transform:uppercase; color:var(--t3); }
+.cv-hour.on{ border-color:var(--amber-line); background:var(--amber-tint); }
+.cv-hour.on .en{ color:var(--amber-soft); }
+.cv-hour[data-k="night"].on{ border-color:var(--blue-line); background:var(--blue-tint); }
+.cv-hour[data-k="night"].on .en{ color:var(--blue-soft); }
+.cv-hour:focus-visible{ outline:2px solid var(--amber-soft); outline-offset:2px; }
+
+.cv-enter{ margin-top:clamp(28px,4vw,54px); }
+button.cv-go{ font:inherit; cursor:pointer; font-size:clamp(15px,1.45vw,20px); letter-spacing:.06em;
+  color:var(--warm); background:transparent; border:1px solid var(--amber-line); border-radius:100px;
+  padding:14px 42px; display:inline-flex; align-items:center; gap:15px;
+  transition:background var(--dur) var(--ease), color var(--dur), box-shadow var(--dur) var(--ease), transform var(--dur); }
+button.cv-go .zh{ font-family:Georgia,serif; font-style:italic; }
+button.cv-go .key{ font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:12px; line-height:1;
+  color:var(--amber-soft); border:1px solid var(--amber-line); border-radius:5px; padding:2px 7px; }
+button.cv-go:hover{ background:var(--amber); color:#160f05;
+  box-shadow:0 0 44px rgba(212,168,75,.34); transform:translateY(-1px); }
+button.cv-go:hover .key{ color:#160f05; border-color:rgba(22,15,5,.45); }
+button.cv-go:focus-visible{ outline:2px solid var(--amber-soft); outline-offset:3px; }
+
+.cv-foot{ position:absolute; left:clamp(28px,6vw,84px); right:clamp(28px,6vw,84px);
+  bottom:clamp(22px,3.4vw,44px); display:flex; justify-content:space-between; gap:20px;
+  font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:clamp(10px,.95vw,12px);
+  letter-spacing:.16em; text-transform:uppercase; color:var(--t3); }
+.cv-foot .r{ color:var(--t4); }
+@media (max-width:640px){ .cv-foot{ position:static; flex-direction:column; gap:6px; margin-top:34px; } }
+@media (prefers-reduced-motion:reduce){
+  #cover .in{ transition:opacity .3s; transform:none; }
+  #cover{ transition:opacity .35s; }
+}
 </style>
 </head>
 <body>
 <div class="title">Lumière & Ombre</div>
+
+<!-- ══ 开场封面 · Title screen（点击"进入"后淡出，露出实时场景与 UI）══ -->
+<div id="cover" role="dialog" aria-label="光影模拟器 · 封面">
+  <div class="cv">
+    <div class="cv-eyebrow in d1">空教室 · 光影模拟器 <span class="sep">/</span> Real-Time Classroom Lighting</div>
+    <h1 class="cv-title in d2">Lumière <span class="amp">&amp;</span> Ombre</h1>
+    <p class="cv-tagline in d3">一间教室，一整天的光。<span class="en">Real-time daylight in one room — pick an hour and step inside.</span></p>
+
+    <div class="cv-choose in d4">
+      <div class="lbl">选择进入时刻 · Choose an hour</div>
+      <div class="cv-hours">
+        <button class="cv-hour on" data-k="morning" type="button"><span class="zh">清晨</span><span class="en">Morning</span></button>
+        <button class="cv-hour"    data-k="noon"    type="button"><span class="zh">正午</span><span class="en">Noon</span></button>
+        <button class="cv-hour"    data-k="dusk"    type="button"><span class="zh">傍晚</span><span class="en">Dusk</span></button>
+        <button class="cv-hour"    data-k="night"   type="button"><span class="zh">深夜</span><span class="en">Night</span></button>
+      </div>
+    </div>
+
+    <div class="cv-enter in d5">
+      <button class="cv-go" id="cvGo" type="button"><span class="zh">进入</span> Enter <span class="key">↵</span></button>
+    </div>
+  </div>
+  <div class="cv-foot in d6">
+    <span>Three.js r164 · WebGL2 · GTAO</span>
+    <span class="r">拖动旋转 · 滚轮缩放 · WASD 漫游</span>
+  </div>
+</div>
 <canvas id="bloomCanvas"></canvas>
 <canvas id="grainCanvas"></canvas>
 
@@ -9262,6 +9372,42 @@ document.addEventListener('keydown', e=>{
     if(hp.has('dbg')) apply(hp.get('dbg'));
   }
   hud();
+})();
+</script>
+<!-- ══ 开场封面逻辑 · Title-screen logic ══ -->
+<script>
+(()=>{
+  const cover=document.getElementById('cover');
+  if(!cover) return;
+  const hours=[...cover.querySelectorAll('.cv-hour')];
+  const goBtn=document.getElementById('cvGo');
+
+  // 入场：下一帧加 .ready 触发交错淡入
+  requestAnimationFrame(()=>requestAnimationFrame(()=>cover.classList.add('ready')));
+
+  // 选择时刻 → 实时重照背景场景（applyPreset 为全局函数，onclick 亦调用它）
+  hours.forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      hours.forEach(b=>b.classList.remove('on'));
+      btn.classList.add('on');
+      try{ applyPreset(btn.dataset.k); }catch(e){}
+    });
+  });
+
+  let gone=false;
+  function enter(){
+    if(gone) return; gone=true;
+    cover.classList.add('leaving');
+    setTimeout(()=>{ cover.style.display='none'; }, 950);
+  }
+  goBtn.addEventListener('click',enter);
+
+  // 键盘：Enter/空格 进入；1–4 选时刻（仅封面在场时拦截，进入后放行给模拟器）
+  window.addEventListener('keydown',(e)=>{
+    if(gone) return;
+    if(e.key==='Enter'||e.key===' '){ e.preventDefault(); e.stopPropagation(); enter(); }
+    else if(e.key>='1'&&e.key<='4'){ e.stopPropagation(); const b=hours[+e.key-1]; if(b) b.click(); }
+  }, true);
 })();
 </script>
 </body>

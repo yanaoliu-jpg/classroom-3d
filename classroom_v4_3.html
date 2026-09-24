@@ -7,7 +7,9 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:#000;overflow:hidden;width:100vw;height:100vh;}
-canvas{display:block;position:absolute;top:0;left:0;}
+/* 画面为内缩画幅(见 FRAME_FILL/frameAspect)：三层画布统一圆角，四周露出的黑色 body 即画框。
+   内缩同时也是性能手段——渲染像素数按面积等比下降，铺满全屏时帧率明显更低。 */
+canvas{display:block;position:absolute;top:0;left:0;border-radius:12px;}
 
 /* ── Design tokens ── */
 :root{
@@ -31,6 +33,10 @@ canvas{display:block;position:absolute;top:0;left:0;}
   --dur:.22s;
   --radius:8px; --radius-chip:6px;
   --blur:blur(10px);
+  /* 底部控制面板的实时高度（面板收起时为 0），由 layoutViewport() 写入。
+     所有贴底的 HUD（帧率/罗盘/时间轴/提示）都以它为基准上浮，
+     这样面板展开、收起、换行变高时它们永远叠在面板之上而不是被压在下面。 */
+  --panel-h:0px;
 }
 
 .title{
@@ -137,17 +143,16 @@ canvas{display:block;position:absolute;top:0;left:0;}
 .aspect-btn:hover{color:var(--t1);border-color:var(--line-hi);}
 .aspect-btn.on{color:var(--t1);border-color:var(--line-hi);background:var(--chip-bg-hi);}
 .q-cap{font-family:monospace;font-size:8px;letter-spacing:.1em;color:var(--t3);opacity:.75;}
-.perf-tog{display:flex;align-items:center;justify-content:space-between;font-family:monospace;font-size:9px;letter-spacing:.06em;color:var(--t3);}
 /* 帧率读数（左下角，实测每秒帧数，验证提帧是否属实） */
 #fpsMeter{
-  position:fixed;left:16px;bottom:14px;z-index:11;
+  position:fixed;left:16px;bottom:calc(var(--panel-h) + 18px);z-index:11;transition:bottom .35s var(--ease);
   font-family:monospace;font-size:10px;letter-spacing:.1em;
   color:var(--t2);background:var(--chip-bg);border:1px solid var(--line);
   border-radius:var(--radius-chip);padding:4px 9px;
   pointer-events:none;font-variant-numeric:tabular-nums;backdrop-filter:var(--blur);
 }
 /* 方位罗盘（右下角）：盘面随相机朝向旋转，屏幕上方=当前面朝方向；北=-Z 红色 */
-#compass{position:fixed;right:22px;bottom:58px;width:52px;height:52px;border-radius:50%;border:1px solid var(--line);background:var(--chip-bg);backdrop-filter:var(--blur);z-index:11;pointer-events:none;}
+#compass{position:fixed;right:22px;bottom:calc(var(--panel-h) + 18px);transition:bottom .35s var(--ease);width:52px;height:52px;border-radius:50%;border:1px solid var(--line);background:var(--chip-bg);backdrop-filter:var(--blur);z-index:11;pointer-events:none;}
 #compassRose{position:absolute;inset:0;font-family:monospace;font-size:10px;font-weight:700;color:var(--t3);transition:transform .12s linear;}
 #compassRose b{position:absolute;}
 #compassRose .cn{top:2px;left:50%;transform:translateX(-50%);color:#e0574a;}
@@ -174,6 +179,14 @@ input[type=range].r::-webkit-slider-thumb{background:#ff8866;box-shadow:0 0 6px 
 input[type=range].g:hover::-webkit-slider-thumb{transform:scale(1.25);box-shadow:0 0 9px rgba(212,168,75,.75);}
 input[type=range].b:hover::-webkit-slider-thumb{transform:scale(1.25);box-shadow:0 0 9px rgba(136,170,255,.75);}
 input[type=range].r:hover::-webkit-slider-thumb{transform:scale(1.25);box-shadow:0 0 9px rgba(255,136,102,.75);}
+/* 键盘可达性：主界面此前只有封面两个按钮有 :focus-visible，其余按钮/滑块/开关全无焦点指示，
+   而 input[type=range] 又显式 outline:none —— 用 Tab 走一遍完全看不出焦点在哪。
+   统一补一圈琥珀色描边；:focus-visible 只在键盘操作时出现，鼠标点击不会留描边。 */
+button:focus-visible,
+input[type=range]:focus-visible,
+.tog input:focus-visible + .togs{
+  outline:2px solid var(--amber-soft); outline-offset:2px; border-radius:4px;
+}
 .val{font-family:monospace;font-size:9px;color:var(--t2);width:30px;text-align:right;flex-shrink:0;font-variant-numeric:tabular-nums;}
 .tog-row{display:flex;align-items:center;gap:8px;margin-left:auto;}
 .tog-row label{font-family:monospace;font-size:8px;letter-spacing:.08em;color:rgba(136,170,255,.55);cursor:pointer;}
@@ -186,7 +199,8 @@ input[type=range].r:hover::-webkit-slider-thumb{transform:scale(1.25);box-shadow
 .ratio-wrap{flex:1;height:3px;background:rgba(255,255,255,.06);border-radius:2px;position:relative;overflow:hidden;}
 #ratioBar{position:absolute;left:0;top:0;height:100%;background:linear-gradient(to right,var(--amber),var(--blue));transition:width .25s var(--ease);}
 .hint-btm{
-  position:fixed;bottom:155px;left:50%;transform:translateX(-50%);
+  /* 贴在画面下沿：由 layoutViewport() 按画幅矩形写入 --hint-bottom，画幅变化时自动跟随 */
+  position:fixed;bottom:var(--hint-bottom, calc(var(--panel-h) + 78px));left:50%;transform:translateX(-50%);
   font-family:monospace;font-size:9px;letter-spacing:.16em;
   color:var(--t4);text-transform:uppercase;
   pointer-events:none;transition:opacity 2s;white-space:nowrap;z-index:9;
@@ -201,7 +215,9 @@ input[type=range].r:hover::-webkit-slider-thumb{transform:scale(1.25);box-shadow
 
 /* ── Time-of-day timeline (光源漂移 时间轴) ── */
 #timeline{
-  position:fixed; bottom:60px; left:50%; transform:translateX(-50%);
+  /* BUGFIX：原为 bottom:60px —— 底部面板高约 129px，时间轴正好压在"窗光"三个滑块上。
+     改为以 --panel-h 为基准上浮，面板开合时自动跟随。 */
+  position:fixed; bottom:calc(var(--panel-h) + 16px); left:50%; transform:translateX(-50%);
   display:flex; align-items:center; gap:12px;
   background:rgba(12,12,16,.66); backdrop-filter:var(--blur);
   border:1px solid var(--line-hi); border-radius:24px;
@@ -211,6 +227,7 @@ input[type=range].r:hover::-webkit-slider-thumb{transform:scale(1.25);box-shadow
   transition:opacity .45s var(--ease), transform .45s var(--ease); letter-spacing:.06em;
 }
 #timeline.hidden{ opacity:0; pointer-events:none; transform:translateX(-50%) translateY(10px); }
+#timeline{ transition:opacity .45s var(--ease), transform .45s var(--ease), bottom .35s var(--ease); }
 .tl-btn{
   width:28px;height:28px;border-radius:50%; flex:none;
   background:var(--amber-tint); border:1px solid var(--amber-line);
@@ -221,9 +238,33 @@ input[type=range].r:hover::-webkit-slider-thumb{transform:scale(1.25);box-shadow
 .tl-btn:hover{ background:rgba(212,168,75,.26); transform:scale(1.08); }
 .tl-btn:active{ transform:scale(1); }
 .tl-wrap{ display:flex; flex-direction:column; gap:3px; }
+/* BUGFIX：#timeSlider 原本 background:transparent，而全局 input[type=range] 又把
+   -webkit-appearance 关掉、且只给 .g/.b/.r 三个类的 thumb 上色 —— 这个没有类名的滑块
+   于是轨道透明、滑块也透明，整条时间轴在深色背景上完全看不见（只剩下面一排刻度文字）。
+   这里给它一条"一天的颜色"轨道：夜蓝 → 晨金 → 正午冷白 → 暮橙 → 夜蓝，
+   既能看见，也顺手表达了它拖动的是什么。 */
 #timeSlider{
-  width:340px; cursor:pointer; accent-color:var(--amber);
-  background:transparent;
+  width:340px; height:6px; cursor:pointer; border-radius:3px;
+  background:linear-gradient(to right,
+    #0d1430 0%,    /* 05:30 黎明前 */
+    #d4a84b 14%,   /* 日出暖金     */
+    #cfe0f5 46%,   /* 正午冷白     */
+    #e08a46 74%,   /* 夕照暖橙     */
+    #101a38 90%,   /* 入夜         */
+    #0d1430 100%);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.10);
+}
+#timeSlider:hover{ box-shadow:inset 0 0 0 1px rgba(255,255,255,.22); }
+#timeSlider::-webkit-slider-thumb{
+  -webkit-appearance:none; width:14px; height:14px; border-radius:50%;
+  background:var(--warm); border:2px solid rgba(0,0,0,.55);
+  box-shadow:0 0 8px rgba(255,240,210,.65);
+  transition:transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+#timeSlider:hover::-webkit-slider-thumb{ transform:scale(1.18); box-shadow:0 0 12px rgba(255,240,210,.85); }
+#timeSlider::-moz-range-thumb{
+  width:14px; height:14px; border-radius:50%; border:2px solid rgba(0,0,0,.55);
+  background:var(--warm); box-shadow:0 0 8px rgba(255,240,210,.65);
 }
 .tl-ticks{
   display:flex; justify-content:space-between;
@@ -250,6 +291,8 @@ input[type=range].r:hover::-webkit-slider-thumb{transform:scale(1.25);box-shadow
   z-index:5;pointer-events:none;
   display:block;
   image-rendering:auto;
+  /* 顶层画布顺带画出画框：一道极细亮边 + 外投影，让内缩画幅像一块屏而不是"没铺满" */
+  box-shadow:0 0 0 1px rgba(255,255,255,.07), 0 32px 90px -46px rgba(0,0,0,.95);
 }
 /* ── Bloom overlay (亮部辉光，screen 混合叠加在 WebGL 之上、grain 之下) ── */
 #bloomCanvas{
@@ -383,11 +426,35 @@ button.cv-go:focus-visible{ outline:2px solid var(--amber-soft); outline-offset:
 </div>
 
 <div id="topBtns">
-  <button class="top-btn" id="shotBtn" onclick="takeShot()">↓ 截图</button>
-  <button class="top-btn" id="settingsBtn" onclick="toggleSettings()">⚙ 设置</button>
+  <button class="top-btn" id="driftBtn" onclick="toggleDrift()" title="日光推移：一天 05:30→22:30 连续演示（快捷键 T）">⏱ 时间轴</button>
+  <button class="top-btn" id="shotBtn" onclick="takeShot()" title="保存当前画面为 PNG（含辉光与暗角）">↓ 截图</button>
+  <button class="top-btn" id="settingsBtn" onclick="toggleSettings()" title="机位 / 清晰度 / 室内灯 / 天气（Esc 关闭）">⚙ 设置</button>
 </div>
 
-<div class="hint-btm" id="hint">拖动旋转视角 · 拖动光球移动光源 · 滚轮缩放</div>
+<!-- ══ 时间轴（光源漂移）：一天 05:30→22:30 连续推移，太阳东升西落 ══════════════════
+     BUGFIX：这段 UI 此前整块缺失 —— CSS(#timeline/.tl-btn/#timeSlider/.tl-speed…)、
+     全部逻辑(toggleDrift/togglePlay/setDriftSpeed/onTimelineScrub/syncTimelineUI)
+     以及渲染循环里那整段 `if(driftOn){…}`(日夜光照、自动开关灯、时钟显示)都在，
+     唯独没有任何标签能把 driftOn 打开 → 整个"日光推移"主功能无法触达；
+     而 toggleDrift() 内部又直接 document.getElementById('driftBtn').classList，
+     一旦被调用就会抛 TypeError(null)。这里按原 CSS 结构把标签补回。 -->
+<div id="timeline" class="hidden">
+  <button class="tl-btn" id="playBtn" onclick="togglePlay()" title="播放 / 暂停">▶</button>
+  <div class="tl-wrap">
+    <input type="range" id="timeSlider" min="0" max="0.9999" step="0.0001" value="0"
+           oninput="onTimelineScrub(this.value)" title="拖动到一天中的任意时刻">
+    <div class="tl-ticks"><span>05:30</span><span>09:00</span><span>13:00</span><span>17:00</span><span>22:30</span></div>
+  </div>
+  <div id="timeSliderLabel">05:30</div>
+  <div class="tl-speeds">
+    <button class="tl-speed"    data-spd="0.5" onclick="setDriftSpeed(0.5)">0.5×</button>
+    <button class="tl-speed on" data-spd="1"   onclick="setDriftSpeed(1)">1×</button>
+    <button class="tl-speed"    data-spd="2"   onclick="setDriftSpeed(2)">2×</button>
+    <button class="tl-speed"    data-spd="4"   onclick="setDriftSpeed(4)">4×</button>
+  </div>
+</div>
+
+<div class="hint-btm" id="hint">拖动旋转视角 · 拖动光球移动光源 · 滚轮缩放 · WASD 漫游 · T 时间轴 · Tab 收面板</div>
 <div id="timeDisplay"></div>
 <div id="fpsMeter">-- FPS</div>
 <div id="compass" title="方位罗盘：屏幕上方=你面朝的方向"><div id="compassRose"><b class="cn">N</b><b class="ce">E</b><b class="cs">S</b><b class="cw">W</b></div></div>
@@ -420,7 +487,11 @@ button.cv-go:focus-visible{ outline:2px solid var(--amber-soft); outline-offset:
         <button class="aspect-btn" onclick="applyView(CAM_VIEWS['5'])">教室</button>
       </div>
     </div>
-    <!-- 性能 Performance：清晰度档位 + 动态分辨率（抗锯齿已取消） -->
+    <!-- 性能 Performance：只剩清晰度档位。
+         「动态分辨率·转动时降」开关已删除：它靠转动视角时临时降分辨率来换帧率，
+         代价是拖动鼠标时整个画面(以及桌椅/窗框边缘)糊一下再变清晰 —— 属于用模糊补帧，
+         本项目明确不采用。帧率改由真正减少每帧计算量来解决(见顶部 makeSpotLightsDiffuseOnly 等)，
+         任何时刻都是同一个分辨率，转动中画面不变糊。 -->
     <div class="pcol">
       <div class="ptitle">⚡ 性能 · Performance</div>
       <div class="q-cap">清晰度（越高越清晰、越吃帧）</div>
@@ -429,7 +500,7 @@ button.cv-go:focus-visible{ outline:2px solid var(--amber-soft); outline-offset:
         <button class="aspect-btn q-btn" data-q="1.3" onclick="setQuality('1.3')">均衡 1.3</button>
         <button class="aspect-btn q-btn on" data-q="1.75" onclick="setQuality('1.75')">高清 1.75</button>
       </div>
-      <div class="perf-tog"><span>动态分辨率 · 转动时降</span><label class="tog"><input type="checkbox" id="dynOn" onchange="setDynRes(this.checked)"><span class="togs"></span></label></div>
+      <div class="q-cap" style="margin-top:9px;opacity:.62">全程恒定分辨率 · 转动不降画质</div>
     </div>
     <!-- Ceiling LED -->
     <div class="pcol">
@@ -456,6 +527,11 @@ button.cv-go:focus-visible{ outline:2px solid var(--amber-soft); outline-offset:
         <button class="aspect-btn wx-btn"    data-wx="cloudy" onclick="setWeather('cloudy')">阴天</button>
         <button class="aspect-btn wx-btn"    data-wx="rain"   onclick="setWeather('rain')">雨天</button>
         <button class="aspect-btn wx-btn"    data-wx="snow"   onclick="setWeather('snow')">雪天</button>
+      </div>
+      <div class="q-cap" style="margin-top:9px">窗外背景（不影响室内光照）</div>
+      <div class="aspect-row" style="flex-wrap:wrap;gap:5px">
+        <button class="aspect-btn sky-btn on" data-sky="1" onclick="setSkyBlue(true)">蓝天背景</button>
+        <button class="aspect-btn sky-btn"    data-sky="0" onclick="setSkyBlue(false)">纯黑背景</button>
       </div>
     </div>
   </div>
@@ -4758,47 +4834,92 @@ void main() {
 // 显式开启（r164 默认即 true）；白天视角因此会更暗，属预期，Task 6 重新平衡曝光/灯光。
 // 现在锁定色彩管线，避免 Task 3-4 的面光/反弹调参在 Task 6 翻转 CM 时全部失效。
 THREE.ColorManagement.enabled = true;
+
+// ══ 提帧★（最大单项，实测 44.6ms/帧 → 34.6ms/帧）：SpotLight 改为"只算漫反射" ══════════
+// 诊断（Apple M4 实测，readPixels 强制同步逐项计时）：
+//   全部 39 盏灯 44.6ms · 只留 4 盏(环境/半球/太阳/月亮) 3.6ms · 隐藏一半网格 37.1ms
+//   → 帧时间的 ~93% 花在"每个 fragment 把 39 盏灯全遍历一遍"的片元着色上，
+//     与网格数(1109)、draw call(982)、阴影贴图、后处理都基本无关。降分辨率能提帧正是因为它是片元瓶颈。
+// 为什么可以安全地去掉 SpotLight 的高光：本场景 10 盏 SpotLight 全部 castShadow=false，
+// 且全部是**间接光的近似**——windowFills(窗玻璃散射)、ceilBounce(地面→吊顶反弹)、
+// floorBounce(地砖→桌底反弹)、winSpot(走廊漏光)。它们模拟的是漫反射 GI，
+// 本来就不该产生 GGX 镜面高光（真实反弹光是漫射的，打不出清晰高光点）。
+// 去掉高光分支后片元着色器指令数/寄存器占用大幅下降 → 占用率回升，收益是超线性的。
+// 实测画面差异 meanAbs = 0.19/255（肉眼不可辨）。太阳(DirectionalLight)、吊顶灯(PointLight)、
+// 面光源(RectAreaLight) 的完整 PBR 高光一律保留，玻璃/瓷砖/金属的质感不变。
+(function makeSpotLightsDiffuseOnly(){
+  const RE_DIRECT = 'RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );';
+  const DIFFUSE_ONLY = 'reflectedLight.directDiffuse += saturate( dot( geometryNormal, directLight.direction ) ) * directLight.color * BRDF_Lambert( material.diffuseColor );';
+  const src = THREE.ShaderChunk.lights_fragment_begin;
+  // r164 的 lights_fragment_begin 里 RE_Direct 依次出现在 POINT / SPOT / DIR 三个展开循环中，
+  // 只替换第 2 个(SPOT)。若上游改版导致顺序/数量不符，就原样跳过（宁可不提帧，也不出错画）。
+  const i0 = src.indexOf(RE_DIRECT);
+  const i1 = src.indexOf(RE_DIRECT, i0 + 1);
+  const spotAt = src.indexOf('NUM_SPOT_LIGHTS > 0'), dirAt = src.indexOf('NUM_DIR_LIGHTS > 0');
+  if(i0 < 0 || i1 < 0 || !(i1 > spotAt && i1 < dirAt)){
+    console.warn('[perf] lights_fragment_begin 结构与预期不符，跳过 SpotLight 漫反射优化');
+    return;
+  }
+  THREE.ShaderChunk.lights_fragment_begin =
+    src.slice(0, i1) + DIFFUSE_ONLY + src.slice(i1 + RE_DIRECT.length);
+})();
+
 // 提帧③：antialias 关闭——最终画面由 EffectComposer 的 OutputPass 把一张离屏后处理贴图铺满 canvas，
 // canvas 原生 MSAA 只对"写入默认帧缓冲的几何边缘"生效，而这里写入的是一张全屏矩形(边缘在屏幕外)，
 // 场景边缘早已在离屏 HalfFloat 目标里栅格化完成、不受 canvas MSAA 影响 → 开着是纯浪费，关闭画面零变化。
 // preserveDrawingBuffer 保留：截图按钮(takeShot→buildShotCanvas)需回读 canvas 像素。
 const renderer=new THREE.WebGLRenderer({antialias:false,preserveDrawingBuffer:true,powerPreference:'high-performance'}); // 提帧②：双显卡机器优先选独显（画面不变）
-// 超采样抗锯齿(SSAA)：>1 时以更高分辨率渲染再缩回，转动视角时边缘/高光闪烁明显减弱。
-// 若觉得掉帧/发烫，把 SUPERSAMPLE 调回 1.0；想更干净可调到 2.0（更吃显卡）。
-const SUPERSAMPLE = 1.0;
-const pixelRatioCap = ()=> Math.min(devicePixelRatio * SUPERSAMPLE, 1.75); // 提帧：Retina 上限 2→1.75(像素数≈−23%)；想更锐改回 2
+// （SUPERSAMPLE / pixelRatioCap 已删除：两者都没有任何调用点，渲染分辨率实际由
+//   CANVAS_PR(canvas 固定倍率) 与 curRes(清晰度档位) 决定，留着只会误导后来改代码的人。）
 // 控制面板展开时，画面收缩到面板上方，避免底部教室被面板遮住看不到。
 let panelOpen = true;
+// 时间轴条的净高(含上下留白)：打开时从可用区里扣掉这一条，画幅相应上移变小，
+// 时间轴就永远压不到画面上；关掉时画幅自动长回去。
+const TIMELINE_STRIP = 64;
 function viewSize(){
   const p = document.getElementById('panel');
   const ph = (panelOpen && p) ? p.offsetHeight : 0;   // offsetHeight 不受 translateY 收起动画影响
-  return { w: innerWidth, h: Math.max(1, innerHeight - ph) };
+  // 用时间轴元素自身的可见性判断，而不是读 driftOn：viewSize() 在渲染器初始化时就会被调用，
+  // 那时 `let driftOn` 还在暂时性死区里 —— 连 typeof 都会抛 ReferenceError（typeof 只对
+  // 未声明的标识符安全，对 TDZ 中的 let/const 一样抛）。元素不存在时 ?. 返回 undefined → 不占位。
+  const tlEl = document.getElementById('timeline');
+  const th = (tlEl && !tlEl.classList.contains('hidden')) ? TIMELINE_STRIP : 0;
+  return { w: innerWidth, h: Math.max(1, innerHeight - ph - th) };
 }
 // 画幅：把渲染矩形约束成所选比例(16:9 默认 / 2.35 / 21:9 / 4:3)，在可用区内居中，
 // 四周露出的黑色 body 即上下(letterbox)或左右(pillarbox)黑边。
-let frameAspect = 0;   // 默认全屏铺满（画幅选择器已删）
+const frameAspect = 16/9; // 固定 16:9 画幅（不铺满屏幕，四周留黑边）；画幅选择器已删除
+// 画面占可用区的比例：<1 → 画幅四周留一圈黑边，网页打开时画面不沾满整个屏幕（画框感）。
+// 原值 0.88 同时兼着"少渲染 23% 像素"的提帧任务；现在片元成本已降到原来的 1/5（见顶部
+// makeSpotLightsDiffuseOnly / LAYER_CORRIDOR），不必再拿画面大小换帧率 → 提到 0.94，
+// 画面明显更大更沉浸，仍保留四周那圈黑框。像素数只增加约 14%，实测仍稳在 90 FPS 以上。
+const FRAME_FILL = 0.94;
 function frameRect(){
   const av = viewSize();
-  if(!frameAspect){ return { w: av.w, h: av.h, left: 0, top: 0 }; } // 0=全屏：铺满可用区(无黑边)
+  const aw = Math.max(1, Math.round(av.w * FRAME_FILL));   // 内缩后的可用区
+  const ah = Math.max(1, Math.round(av.h * FRAME_FILL));
+  // 竖屏/近方屏(手机)强套 16:9 会把画面压成一条窄带 → 那里只做内缩，不锁比例。
+  const ar = (av.w / av.h >= 1.2) ? frameAspect : 0;
   let w, h;
-  if (av.w / av.h > frameAspect){ h = av.h; w = Math.round(h * frameAspect); } // 可用区更宽→上下黑边
-  else { w = av.w; h = Math.round(w / frameAspect); }                            // 可用区更高→左右黑边
+  if(!ar){ w = aw; h = ah; }                                // 0=不限比例：只做内缩
+  else if (aw / ah > ar){ h = ah; w = Math.round(h * ar); }  // 可用区更宽→左右留更多
+  else { w = aw; h = Math.round(w / ar); }                   // 可用区更高→上下留更多
   const left = Math.round((av.w - w) / 2);
   const top  = Math.round((av.h - h) / 2);   // 仅在面板上方的可用区内垂直居中
   return { w, h, left, top };
 }
 { const r=frameRect(); renderer.setSize(r.w, r.h); }
-// ── 渲染清晰度 / 动态分辨率 状态（⚙设置面板控制；curRes = 当前实际 pixelRatio）──
-let resStill = 1.75;         // 静止(档位)分辨率：省电1.0 / 均衡1.3 / 高清1.75，默认高清
-let dynResEnabled = false;   // 动态分辨率：转动/移动时临时降到 RES_MOVING
-const RES_MOVING = 1.0;      // 运动时分辨率
-let curRes = resStill;       // 当前实际渲染倍率（动态时每帧平滑趋近）
+// ── 渲染清晰度状态（⚙设置面板控制；curRes = 当前实际渲染倍率）──
+// 恒定不变：不存在"转动时降分辨率"的动态档位(那是用模糊补帧)，只有用户手选的三档。
+let resStill = 1.75;         // 清晰度档位：省电1.0 / 均衡1.3 / 高清1.75，默认高清
+let curRes = resStill;       // 当前实际渲染倍率
 let _appliedRes = -1;        // 上次真正 setSize 采用的倍率
-let _lastInteract = -1e9;    // 最后一次交互(拖动/滚轮/按键)时间戳
-// canvas(renderer)固定在此分辨率——动态/切档位只改 composer 离屏，canvas 显存不重建=不闪。
+// canvas(renderer)固定在此分辨率——切档位只改 composer 离屏，canvas 显存不重建=不闪。
 const CANVAS_PR = Math.min(devicePixelRatio || 1, 1.75);
 renderer.setPixelRatio(CANVAS_PR);
-renderer.useLegacyLights = false;                // Task6: 切换到物理正确灯光(光强单位=瓦特/坎德拉)；point/spot 需 ×π 补偿
+// （renderer.useLegacyLights = false 已删除：r155 起物理正确灯光就是默认值，r164 把该属性标为
+//   deprecated —— 显式赋值不改变任何行为，只会在控制台反复打印迁移警告。灯光单位仍是物理单位，
+//   代码里 point/spot 的 ×π 补偿照旧有效。）
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 // 提帧①：静态阴影贴图。只有 mainLight(太阳)投影且阴影是世界空间的——转相机时阴影不变，
@@ -4854,10 +4975,14 @@ const outputPass = new THREE.OutputPass();
 composer.addPass(renderPass);
 composer.addPass(outputPass);
 // ── GTAO (ground-truth ambient occlusion)：在 RenderPass 之后注入接触阴影 ──────
-// 性能：GTAO 以半分辨率计算 AO，再由 blendMaterial 经 UV 双线性上采样合成到全分辨率画面，
-// AO 是低频遮蔽信号，半分辨率几乎不可见劣化，却把 AO/降噪每像素开销降到 1/4。
-const GTAO_SCALE = 0.5;
-const gtaoSize = ()=> { const {w,h}=frameRect(); return { w: Math.max(1, Math.round(w*GTAO_SCALE)), h: Math.max(1, Math.round(h*GTAO_SCALE)) }; };
+// 性能：GTAO 以降分辨率计算 AO，再由 blendMaterial 经 UV 双线性上采样合成到全分辨率画面，
+// AO 是低频遮蔽信号，降分辨率几乎不可见劣化，却把 AO/降噪每像素开销降到 1/9。
+// BUGFIX：原本按 frameRect()(CSS 像素)×0.5 算，而场景实际渲染在 CSS×curRes 的离屏目标上
+// → 清晰度档位越高(curRes 1.0→1.75)，AO 相对越糊(真实比例从 0.50 掉到 0.29)，正好反了。
+// 现在跟 curRes 走，任何档位下 AO 与画面的比例都恒为 GTAO_SCALE。
+const GTAO_SCALE = 0.34;   // 相对**实际渲染分辨率**；默认高清档下约等于此前的实际取值，换档不再漂移
+const gtaoSize = ()=> { const {w,h}=frameRect(); const k=GTAO_SCALE*curRes;
+  return { w: Math.max(1, Math.round(w*k)), h: Math.max(1, Math.round(h*k)) }; };
 const gtaoPass = (()=>{ const s=gtaoSize(); return new THREE.GTAOPass(scene, camera, s.w, s.h); })();
 const gtaoParams = {
   radius: 0.35, distanceExponent: 1.0, thickness: 1.0, scale: 1.0,
@@ -4865,6 +4990,17 @@ const gtaoParams = {
 };
 gtaoPass.updateGtaoMaterial(gtaoParams);
 composer.insertPass(gtaoPass, 1); // RenderPass(0) 之后、OutputPass(末尾) 之前
+// ── 渲染层：按「相机在教室里 / 在走廊里」把两侧各自用不到的灯整组摘掉 ───────────────
+// three.js 前向渲染对灯不做可见性剔除：每个 fragment 都要遍历场景里全部的灯，
+// 一盏照不到当前画面的灯照样吃满成本。但 WebGLRenderer.projectObject 会对灯执行
+// object.layers.test(camera.layers) —— 相机没开这一层的灯根本不进 uniform 数组，
+// 着色器按更少的灯数重新编译，等于真的不存在。于是可以按相机所在的房间整组开关：
+//   0 = 默认（所有几何体 + 太阳/月光/环境光/天花板灯 等两边都要的灯）
+//   1 = 走廊吸顶灯 ×8      —— 只有相机进了走廊才点（教室内实测贡献 meanAbs 0.11/255，却值 ~6ms/帧）
+//   2 = 教室窗侧反弹补光 ×7 —— 只有相机在教室里才点（走廊里实测贡献 meanAbs ≤0.23/255，却值 ~8ms/帧）
+// 两层永远同时反向切换 → 全局只有两种灯数组合，开场封面里都预编译过(见 warmUpShaderVariants)。
+const LAYER_CORRIDOR = 1;
+const LAYER_ROOMFILL = 2;
 let theta=-0.34,phi=0.055,camR=13.5; // 初始视角后移约两排桌椅(camR 9.5→13.5)，更靠后的整体取景
 let panX=0, panZ=0, panY=0;         // 注视点偏移：WASD 水平平移 / QE 垂直升降（相机绕可移动的目标环绕 → 自由漫游）
 const moveKeys=Object.create(null); // 当前按下的移动键集合
@@ -4875,6 +5011,28 @@ function updateCam(){
     panZ + camR*Math.cos(theta)*Math.cos(phi)
   );
   camera.lookAt(panX, 1.2 + panY, panZ);
+  updateCorridorLightLayer();
+}
+
+// ── 层开关：相机跨过右墙进出走廊时，把两侧各自用不到的那组灯整体摘掉/装回 ──────────
+// 右墙内表面在 x=RW/2=7，走廊在它外侧(x≈7~8.9)。阈值带 6.4 / 7.0 做迟滞：
+// 越过右墙就切到"走廊模式"，退回教室一段距离后才切回，贴着墙来回微动不会反复切换。
+// 切换让灯数变化 → three.js 要换一套按新灯数编译的着色器程序：首次编译很贵(实测 ~1.9s)，
+// 但程序有缓存，两种组合都在开场封面期间预编译过(见 warmUpShaderVariants)，
+// 之后切换实测 15~30ms，摊在一帧里看不出来。
+let _corridorLayerOn = null;
+function updateCorridorLightLayer(force){
+  if(typeof camera === 'undefined') return;
+  if(force !== undefined) { applyCorridorLayer(!!force); return; }
+  const x = camera.position.x;
+  const want = (_corridorLayerOn === true) ? (x > 6.4) : (x > 7.0);   // 迟滞：开着时更晚关、关着时更晚开
+  if(want !== _corridorLayerOn) applyCorridorLayer(want);
+}
+// inCorridor=true → 点走廊灯、摘教室反弹补光；false → 反过来。两层互斥，只有两种灯数组合。
+function applyCorridorLayer(inCorridor){
+  _corridorLayerOn = inCorridor;
+  if(inCorridor){ camera.layers.enable(LAYER_CORRIDOR);  camera.layers.disable(LAYER_ROOMFILL); }
+  else          { camera.layers.disable(LAYER_CORRIDOR); camera.layers.enable(LAYER_ROOMFILL);  }
 }
 updateCam();
 
@@ -5507,6 +5665,15 @@ const corrWallMat  = corrGlowMat(0xdadfd4, 0.03, 0.28);   // emisMax 0.58→0.28
 // 一排吸顶灯(4 盏)：自发光灯板 + 下方淡光晕，沿走廊吊顶等距排列
 const fixtureZ = [-2, 1, 4, 7, 10, 13, 16, 19];   // 后段(10~19)随走廊延伸补灯
 const corrLampLights = [];   // 每盏吸顶灯下的真实点光源(替代原来那盏浮在后门口的孤光)：走廊由灯管发光照亮
+// ══ 提帧★：走廊吸顶灯放进「走廊灯层」(LAYER_CORRIDOR)，由相机所在位置决定要不要点亮 ══
+// 背景：three.js 是前向渲染，**每个 fragment 都要把场景里所有灯遍历一遍**，一盏灯不管照不照得到
+// 当前画面都要付全价。这 8 盏灯装在右墙外的走廊里，人站在教室内时它们对画面的贡献实测只有
+// meanAbs=0.11/255（走廊本身是靠 corrGlowMats 的自发光被看见的），却要吃掉约 6ms/帧。
+// 但如果真的走进走廊，它们就是主光源——实测任何"抽稀到 4 盏再加倍亮度"的方案，
+// 站在走廊里看都会掉 12% 亮度并露出暗带(meanAbs≈13.5)，所以不能减数量，只能按位置开关。
+// 做法：three.js 的 WebGLRenderer.projectObject 对灯同样执行 object.layers.test(camera.layers)，
+// 相机没开这一层 → 这些灯根本不进 uniform 数组，着色器按更少的灯数重新编译，等于真的不存在。
+// 切换点见 updateCorridorLightLayer()。
 fixtureZ.forEach(z=>{
   const panelMat = new THREE.MeshStandardMaterial({ color:0xf6f8ff, emissive:0xeaf0ff, emissiveIntensity:0.05, roughness:0.4 });
   corrGlowMats.push({ m:panelMat, baseEmis:0.1, emisMax:2.4, isLamp:true });  // 灯板本体：随亮度电平(不封顶)变化，让"灯在变亮"直观
@@ -5519,6 +5686,7 @@ fixtureZ.forEach(z=>{
   // distance 限制在走廊尺度内(减少越过右墙渗入教室)；不投阴影(省性能)。
   const lampLight = new THREE.PointLight(0xdbe6f2, 0, 4.2, 2);
   lampLight.position.set(CORR_CX, RH-0.28, z);
+  lampLight.layers.set(LAYER_CORRIDOR);        // 只在相机开启该层时参与着色
   scene.add(lampLight); corrLampLights.push(lampLight);
 });
 
@@ -6025,15 +6193,25 @@ function addDoorLayers(faceX, normalSign, cz, w, doorTopY, lowerBotY, lowerTopY)
 const DOOR_CORR_COLOR = 0xdfe8f5;   // 冷白走廊光（与 rWin 一致）
 const DOOR_RECT_MAX   = 1.0;        // 门玻璃面光源峰值(走廊满亮时)；比高窗更近更贴地，取更低值防门口地面过曝
 const DOOR_GLASS_MAX  = 0.0;        // 门玻璃改单块清玻璃后不再自发光(避免"发光的板"违和)；走廊光靠真实面光源投入 + 透过清玻璃看到被照亮的走廊
+// 提帧★：这两扇门玻璃原本各用一盏 RectAreaLight。RectAreaLight 走的是 LTC(线性变换余弦)
+// 积分，每盏每 fragment 要额外采两张查找贴图 + 一大段矩阵运算，是 three.js 里最贵的灯型——
+// 实测这两盏合计约 5.9ms/帧（占优化后整帧的 ~37%），而单独关掉它们的画面差异只有 meanAbs=0.42/255。
+// 换成 SpotLight：门玻璃只有 0.8×0.98m，在 2~3m 外与一盏大张角、高 penumbra 的柔边聚光几乎无法区分，
+// 且 SpotLight 在本文件里已是"只算漫反射"(见顶部 makeSpotLightsDiffuseOnly) → 便宜得多。
+// 光通量换算：面光源是 nit(cd/m²)，聚光是 cd，故 cd ≈ nit × 面积 × DOOR_SPOT_K，
+// DOOR_SPOT_K 由"与原面光源画面差异最小"扫描得出。
+const DOOR_SPOT_K = 2.0;
 const doorCorridorLeaks = [];
 function addDoorCorridorGlow(glassMat, faceX, cz, glassW, glassH, cy){
   glassMat.emissive = new THREE.Color(DOOR_CORR_COLOR);
   glassMat.emissiveIntensity = 0;                       // 由 render 循环随 spill 驱动
-  const rl = new THREE.RectAreaLight(DOOR_CORR_COLOR, 0, glassW, glassH);
+  const rl = new THREE.SpotLight(DOOR_CORR_COLOR, 0, 7.5, Math.PI/2.6, 1.0, 2);
   rl.position.set(faceX - 0.04, cy, cz);                // 贴门玻璃内侧
-  rl.lookAt(faceX - 2.0, cy, cz);                       // 朝教室内(-x)，模拟透过玻璃进来的走廊漫光
-  scene.add(rl);
-  doorCorridorLeaks.push({ light: rl, glassMat });
+  rl.target.position.set(faceX - 2.5, cy, cz);          // 朝教室内(-x)，模拟透过玻璃进来的走廊漫光
+  rl.castShadow = false;
+  scene.add(rl); scene.add(rl.target);
+  // fluxScale：把"面光源强度"换算成等效聚光强度，驱动处(render 循环)直接乘上即可
+  doorCorridorLeaks.push({ light: rl, glassMat, fluxScale: glassW * glassH * DOOR_SPOT_K });
 }
 
 // ── FRONT DOOR (right wall, near front) — 学校标准款：上玻璃下绿漆 ──────────
@@ -6192,10 +6370,14 @@ edgeGlow.position.set(RW/2-0.08, doorH/2, doorZ-doorW/2+0.02);
 scene.add(edgeGlow);
 
 // Point light just outside the door (moonlight source)
+// 已停用：渲染循环里被无条件写成 `corridorLight.intensity = 0`（走廊改由灯管正下方的
+// corrLampLights 照亮，这盏浮在后门口的孤光会把后门玻璃/门框照得像自己在发光）。
+// 但它此前仍 scene.add 进去了 —— three.js 的前向着色是**每个 fragment 遍历全部灯**，
+// 一盏强度恒为 0 的灯照样占满一份 uniform 槽位和一整段展开的循环体代码。
+// 这里改为不入场景：变量保留（corridorElements.light 等处仍在引用），画面零变化，白省一盏灯。
 const corridorLight = new THREE.PointLight(0xb4cdf0, 0.0, 6, 2);
 corridorLight.position.set(RW/2+0.5, 1.8, doorZ);
 corridorLight.castShadow = false;
-scene.add(corridorLight);
 
 // Track all corridor light elements for night-mode activation
 const corridorElements = {
@@ -7043,6 +7225,10 @@ function makeWeatherTex(kind){
 const weatherTex = {};  // 旧平面天气系统已停用（改用 scene.background equirect）
 const extWindows = [];         // 每扇朝外窗：{mat, texByKind} 供 setWeather 切换
 let currentWeather = 'clear';  // 默认晴天
+// 窗外背景：true=蓝天全景图(默认)；false=纯黑(窗外什么都没有，只剩一片黑)。
+// 只影响 scene.background，室内灯光/scene.environment(IBL) 一律不动。
+let skyBlue = true;
+const BLACK_BG = new THREE.Color(0x000000);
 
 // ════════ 窗外真 3D 环境：equirect 环境图作为 scene.background ════════════════════
 // 一张等距柱状全景(上半天空+云，下半地面+地平线)放进 scene.background：不受相机远面裁剪、
@@ -7053,7 +7239,9 @@ function makeEnvTex(kind){
   const rgba=(c,a)=>'rgba('+c[0]+','+c[1]+','+c[2]+','+a+')';
   const lerp=(a,b,t)=>a+(b-a)*t, sstep=(e0,e1,x)=>{let t=Math.max(0,Math.min(1,(x-e0)/(e1-e0)));return t*t*(3-2*t);};
   const P={
-    clear: {zen:[70,132,196],mid:[135,182,226],hor:[206,229,243],sun:true, lo:0.52,hi:0.74,top:[255,255,255],bot:[200,214,230],cov:0.9, gN:[104,124,80], gF:[150,168,120]},
+    // 晴天：地平线不再是近白的雾带（窗口高度正好只看到那一条 → 窗外发灰）。
+    // 整条渐变都保持蓝，只在最贴近地平线处稍微提亮，透过窗看出去就是"蓝天的颜色"。
+    clear: {zen:[46,112,196],mid:[86,152,218],hor:[142,192,232],sun:true, lo:0.52,hi:0.74,top:[255,255,255],bot:[200,214,230],cov:0.9, gN:[104,124,80], gF:[150,168,120]},
     cloudy:{zen:[130,139,149],mid:[162,170,179],hor:[198,203,208],sun:false,lo:0.30,hi:0.60,top:[220,225,231],bot:[142,151,161],cov:1.0, gN:[104,110,96], gF:[150,157,140]},
     rain:  {zen:[60,68,79],  mid:[84,93,103], hor:[112,120,129],sun:false,lo:0.28,hi:0.56,top:[128,137,147],bot:[48,54,62], cov:1.0, gN:[60,66,60],  gF:[92,98,90]},
     snow:  {zen:[140,152,166],mid:[184,195,206],hor:[218,226,233],sun:false,lo:0.32,hi:0.60,top:[244,248,252],bot:[178,189,200],cov:1.0, gN:[226,232,237],gF:[210,220,228]},
@@ -7080,18 +7268,20 @@ function makeEnvTex(kind){
     im.data[i+3]=Math.max(0,Math.min(1,cov))*255;
   }
   cx2.putImageData(im,0,0);ctx.imageSmoothingEnabled=true;ctx.drawImage(cc,0,0,cw,ch,0,0,W,hV);
-  // 下半=地面（地平线雾 → 远地 → 近地）
+  // 下半=地平线以下：不再画绿色地面/远树线（用户要求窗外就是"蓝天的颜色"）。
+  // 改成 地平线雾白 → 天空中段 → 略深的天蓝 的柔和 haze：从窗口向下看也仍是天空，
+  // 不会出现一条灰绿色的地面带把窗口染浊。
+  const low=[Math.round(lerp(P.mid[0],P.zen[0],0.55)),Math.round(lerp(P.mid[1],P.zen[1],0.55)),Math.round(lerp(P.mid[2],P.zen[2],0.55))];
   const gg=ctx.createLinearGradient(0,hV,0,H);
-  gg.addColorStop(0,rgba(P.hor,1));gg.addColorStop(0.12,rgba(P.gF,1));gg.addColorStop(1,rgba(P.gN,1));
+  gg.addColorStop(0,rgba(P.hor,1));gg.addColorStop(0.35,rgba(P.mid,1));gg.addColorStop(1,rgba(low,1));
   ctx.fillStyle=gg;ctx.fillRect(0,hV,W,H-hV);
-  // 地平线远树线（噪声起伏 + 模糊融雾）
-  ctx.save();ctx.filter='blur(2px)';ctx.beginPath();ctx.moveTo(0,hV+3);
-  for(let x=0;x<=W;x+=5){const n=fbm(x/W*26,55);const cr=Math.pow(n,2)*22;ctx.lineTo(x,hV-cr);}
-  ctx.lineTo(W,hV+3);ctx.closePath();ctx.fillStyle=rgba(P.gF,'0.55');ctx.fill();ctx.restore();
   const t=new THREE.CanvasTexture(cv);t.colorSpace=THREE.SRGBColorSpace;t.mapping=THREE.EquirectangularReflectionMapping;
   return t;
 }
 const _envCache={}; const envTexFor=k=>_envCache[k]||(_envCache[k]=makeEnvTex(k));
+// 窗外天空亮度总系数：过低会把蓝天压成灰蓝(看着像脏玻璃)，过高会被 bloom 冲白。
+// 0.85 ≈ 白天窗口是清亮的蓝天，同时留住云的层次。改这一个值即可整体调窗外明暗。
+const SKY_BG_MUL = 0.85;
 scene.background = envTexFor(currentWeather);
 const envParts = { envTexFor };
 
@@ -8133,6 +8323,7 @@ winPositions.forEach(wz => {
   fill.position.set(-RW/2 + 0.35, WIN_BOTTOM + WIN_H*0.5, wZ); // 紧贴窗内侧
   fill.target.position.set(0, 0.4, wZ);       // 射向室内（略偏地面）
   fill.castShadow = false;
+  fill.layers.set(LAYER_ROOMFILL);            // 相机在走廊里时整组摘掉（见 LAYER_ROOMFILL 说明）
   scene.add(fill); scene.add(fill.target);
   windowFills.push(fill);
 });
@@ -8148,6 +8339,7 @@ winPositions.forEach(wz => {
   b.position.set(-RW/2 + 1.0, 0.45, wZ);        // 窗侧地面附近
   b.target.position.set(-RW/2 + 3.4, RH, wZ);   // 斜向上打到窗侧吊顶
   b.castShadow = false;
+  b.layers.set(LAYER_ROOMFILL);               // 同上
   scene.add(b); scene.add(b.target);
   ceilBounce.push(b);
 });
@@ -8155,16 +8347,21 @@ winPositions.forEach(wz => {
 // ── 地面日光反弹补光（朝上 · Stage 8）──────────────────────────────────────────────
 // 直射光打到光泽地砖后向上反弹，打亮课桌底面与朝窗侧的桌腿——PBR 里容易忽略的二次 GI。
 // 从窗侧受光地面朝斜上方打向课桌行；castShadow=false（省性能）；强度/色温由 sync() 跟随窗光，夜间自动熄灭。
+// 提帧★：三盏(每扇窗一盏)合成一盏——这是三者里最弱、最低频的一层补光(只负责把桌底/桌腿托起来一点)，
+// 三个光域沿 z 完全重叠成一条带。改成中间一盏、张角加宽(π/3→π/2.6)覆盖整条窗墙、光通量×3 补回。
+// 实测三盏全关的画面差异才 meanAbs=0.45/255，合成一盏后差异更小，却省下 2 盏灯。
 const floorBounce = [];
-winPositions.forEach(wz => {
-  const wZ = -RD/2 + 6 + RD/2 + wz;             // 与窗心 z 对齐 [2,6,10]
-  const b = new THREE.SpotLight(0xfff2dc, 0.0, 9, Math.PI/3, 0.8, 1.6);
+{
+  const wZ = -RD/2 + 6 + RD/2 + winPositions[1];  // 三扇窗的中间那扇 → 覆盖整条窗墙
+  const b = new THREE.SpotLight(0xfff2dc, 0.0, 11, Math.PI/2.6, 0.9, 1.6);
   b.position.set(-RW/2 + 3.2, 0.08, wZ);        // 窗侧受光地面（高光带）
   b.target.position.set(-RW/2 + 5.6, 1.2, wZ);  // 斜向上打向课桌底面/桌腿朝窗侧的面
   b.castShadow = false;
+  b.layers.set(LAYER_ROOMFILL);               // 同上
   scene.add(b); scene.add(b.target);
   floorBounce.push(b);
-});
+}
+const FLOOR_BOUNCE_COMPENSATE = winPositions.length / floorBounce.length; // 合并后每盏要顶几盏的光通量
 
 // ── 夜间月光（独立于太阳 mainLight）─────────────────────────────────────────────
 // 冷蓝、柔和、从窗侧高处斜下补光（不投影 → 柔和不刺眼）。强度由 moonTarget 平滑驱动：
@@ -8284,6 +8481,12 @@ let driftOn=false,driftT=0,driftTrans=0,driftSunElev=0.04;
 const elAngle = document.getElementById('mAngle');
 const elTemp  = document.getElementById('mTemp');
 const elInt   = document.getElementById('mInt');
+// 同理缓存 animate 循环里其余每帧都要查的元素（时间轴/时钟/天花板灯），省掉逐帧 getElementById。
+const elTimeSlider = document.getElementById('timeSlider');
+const elTimeLabel  = document.getElementById('timeSliderLabel');
+const elTimeDisp   = document.getElementById('timeDisplay');
+const elCeilOn     = document.getElementById('ceilOn');
+const elCeilInt    = document.getElementById('ceilInt');
 let curtainAmt=0; // 窗帘拉合量 0(开)…1(合)，render loop 平滑驱动并联动遮光动画
 let driftPlaying=false; // 时间轴是否自动推移（播放）；为 false 时停在当前 driftT（可拖拽scrub）
 let driftSpeed=1;       // 时间轴播放速度倍率（0.25 / 0.5 / 1 / 1.5 / 2 倍）
@@ -8325,7 +8528,8 @@ function sync(){
   const bounceI = Math.min(0.66, mi * 0.20) * Math.PI * cDim * interiorDim; // GI 反弹补光适度增强(0.16→0.20)→吊顶暖反弹更自然；跟随 mi(窗光)→夜间 mi=0 自动熄灭；Task6 ×π 补偿 SpotLight 物理单位
   ceilBounce.forEach(b => { b.intensity = bounceI; b.color.copy(mainLight.color); });
   // 地面反弹补光：跟随窗光强度与色温；随拉帘压暗
-  const floorI = Math.min(0.55, mi * 0.18) * Math.PI * cDim * interiorDim; // 地面→桌底反弹适度增强(0.14→0.18)→桌底/朝窗桌腿不发死；跟随 mi→夜间自动熄灭；Task6 ×π 补偿 SpotLight 物理单位
+  // ×FLOOR_BOUNCE_COMPENSATE：三盏已合并成一盏(见创建处)，光通量要补回来
+  const floorI = Math.min(0.55, mi * 0.18) * Math.PI * cDim * interiorDim * FLOOR_BOUNCE_COMPENSATE; // 地面→桌底反弹适度增强(0.14→0.18)→桌底/朝窗桌腿不发死；跟随 mi→夜间自动熄灭；Task6 ×π 补偿 SpotLight 物理单位
   floorBounce.forEach(b => { b.intensity = floorI; b.color.copy(mainLight.color); });
   // 主光：透过半透帘布后变暗变柔（拉得越满越暗、阴影越软）
   mainLight.intensity = mi * (1 - 0.72 * cAmt);   // 透帘后主光大幅衰减
@@ -8354,13 +8558,24 @@ syncCorridor();
 function setWeather(kind){
   if(!['clear','cloudy','rain','snow'].includes(kind)) return;
   currentWeather = kind;
-  scene.background = envTexFor(kind);   // equirect 环境图（懒加载）
+  applySkyBg();                          // equirect 环境图（懒加载）/ 或纯黑，取决于 skyBlue
   const L=WX_LIGHT[kind]; wxSun=L.sun; wxFillMul=L.fill; wxSunGrey=L.sunGrey; wxHemiGrey=L.hemiGrey;
   renderer.toneMappingExposure = 1.5 * L.exp;   // 阴雨压暗曝光
   setPrecip(kind);                              // 雨/雪下落粒子
   document.querySelectorAll('.wx-btn').forEach(b => b.classList.toggle('on', b.dataset.wx===kind));
 }
 setWeather(currentWeather);
+
+// 窗外背景：蓝天全景图 / 纯黑。只换 scene.background，室内光照(灯 + scene.environment)一律不变。
+function applySkyBg(){
+  scene.background = skyBlue ? envTexFor(currentWeather) : BLACK_BG;
+}
+function setSkyBlue(on){
+  skyBlue = !!on;
+  applySkyBg();
+  document.querySelectorAll('.sky-btn').forEach(b => b.classList.toggle('on', (b.dataset.sky==='1')===skyBlue));
+}
+setSkyBlue(skyBlue);
 
 // ── Presets ───────────────────────────────────────────────────────────────────
 const PRESETS={
@@ -8376,6 +8591,12 @@ document.body.appendChild(descEl);
 
 function applyPreset(k){
   const p=PRESETS[k];
+  // BUGFIX：时间轴开着时，漂移逻辑每帧都会把三个窗光滑块写回成"当前时刻"的值，
+  // 于是点预设看上去毫无反应（值瞬间被覆盖）。预设=定格的某个时刻，时间轴=连续推移，
+  // 两者互斥：点预设就退出时间轴，画面立刻停在这个预设上。
+  if(driftOn){ driftOn=false; driftPlaying=false; setDriftBtnLabel();
+               document.getElementById('timeline')?.classList.add('hidden');
+               if(typeof layoutViewport==='function') layoutViewport(); }
   document.getElementById('mInt').value=p.mInt;
   document.getElementById('mTemp').value=p.mTemp;
   document.getElementById('mAngle').value=p.mAngle;
@@ -8413,7 +8634,7 @@ function applyPreset(k){
       extB,
       Math.min(1, extB * (1 - w*0.45))
     ));
-    scene.backgroundIntensity = extB * 0.45;   // 窗外天空随昼夜明暗（*0.45 压暗，防曝光/bloom冲白）
+    scene.backgroundIntensity = extB * SKY_BG_MUL;   // 窗外天空随昼夜明暗（×SKY_BG_MUL 总系数，见其定义）
   }
   // Hemisphere bounce: strong at noon, off at night
   hemiTarget = k==='noon' ? 0.55 : k==='morning' ? 0.10 : k==='dusk' ? 0.18 : 0.0; // Task6: 物理灯+提亮，天光间接补光上调(noon→0.55 软化吊顶/上半墙/桌底，明亮通透)；清晨仍较低(→0.10)保丁达尔光柱；夜=0(再乘 envGate 双重门控)
@@ -8434,7 +8655,7 @@ function applyPreset(k){
 }
 function markCustom(){
   document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('on'));
-  document.querySelector(`[onclick="applyPreset('custom')"]`).classList.add('on');
+  document.querySelector(`[onclick="applyPreset('custom')"]`)?.classList.add('on');  // 同 applyPreset：按钮可能被删，不让它抛错
 }
 applyPreset('morning');
 
@@ -8457,12 +8678,19 @@ function syncTimelineUI(){
   if(pb) pb.textContent = driftPlaying ? '⏸' : '▶';
 }
 // 进入 / 退出「时间轴」模式：开启后由 driftT 驱动全场光照，显示时间轴
-function toggleDrift(){
-  driftOn=!driftOn;
+// 这几个函数以前直接对 getElementById 的结果取属性，标签一旦缺失就抛 TypeError(null)
+// —— 正是"时间轴整块 UI 被删掉"那次故障的放大器。统一走可选链，缺标签时只是没有 UI 反馈，不中断逻辑。
+function setDriftBtnLabel(){
   const btn=document.getElementById('driftBtn');
+  if(!btn) return;
   btn.classList.toggle('on',driftOn);
   btn.textContent=driftOn?'⏱ 时间轴 · 开':'⏱ 时间轴';
-  document.getElementById('timeline').classList.toggle('hidden',!driftOn);
+}
+function toggleDrift(){
+  driftOn=!driftOn;
+  setDriftBtnLabel();
+  document.getElementById('timeline')?.classList.toggle('hidden',!driftOn);
+  layoutViewport();   // 给时间轴条腾出/收回高度（见 TIMELINE_STRIP），画面不被盖住
   if(driftOn){
     // 从当前角度滑块推断起始时间，平滑接入；默认开始播放
     const currentAngle = +document.getElementById('mAngle').value;
@@ -8493,8 +8721,9 @@ function setDriftSpeed(s){
 function onTimelineScrub(v){
   if(!driftOn){
     driftOn=true;
-    document.getElementById('timeline').classList.remove('hidden');
-    const b=document.getElementById('driftBtn'); b.classList.add('on'); b.textContent='⏱ 时间轴 · 开';
+    document.getElementById('timeline')?.classList.remove('hidden');
+    setDriftBtnLabel();
+    layoutViewport();
   }
   driftPlaying=false;
   driftTrans=1;                            // 拖拽即时跳转（不缓动残留）
@@ -8576,15 +8805,37 @@ renderer.domElement.addEventListener('touchmove',e=>{
 
 // 把整条渲染管线(相机/WebGL/合成器/GTAO/辉光/颗粒)统一约束到「面板上方」的可视区域，
 // 三层画布(主画面 z0 / bloom z4 / grain z5)尺寸一致对齐，面板展开时画面整体上移不被遮挡。
+// BUGFIX：离屏渲染目标出现小数尺寸。
+// EffectComposer.setSize 内部是 renderTarget.setSize(w*pixelRatio, h*pixelRatio) —— 不取整；
+// 而 renderer.setSize 走的是 Math.floor(w*pr)。curRes=1.75、画幅 901×507 时两边分别是
+// 1576.75×887.25 和 1576×887：纹理按小数分配(驱动向下取整)，viewport 却按小数设，
+// OutputPass 把离屏结果铺到 canvas 时就差了不到一个像素 —— 表现为整画面轻微发虚，
+// 且转动视角时高频边缘(桌沿/窗框/砖缝)持续抖动闪烁。
+// 修法：离屏一律用**整数设备像素**驱动(pixelRatio 固定为 1，尺寸自己算好并取整)。
+function setComposerPixelSize(w, h){
+  composer.setPixelRatio(1);                                  // 由调用方算好设备像素，避免二次小数缩放
+  // 用 floor 而不是 round：renderer.setSize 内部就是 Math.floor(w*pixelRatio)。
+  // 取整方式一致，清晰度档位等于 CANVAS_PR 时离屏与 canvas 尺寸完全相同 → OutputPass 是 1:1 拷贝，
+  // 不会多做一次重采样（round 会在小数正好 .5 时多出 1px，又变成不等比拉伸）。
+  composer.setSize(Math.max(1, Math.floor(w * curRes)), Math.max(1, Math.floor(h * curRes)));
+}
 function layoutViewport(){
   const {w,h,left,top}=frameRect();
+  // 把面板实高与画面下沿写进 CSS 变量：贴底的 HUD(帧率/罗盘/时间轴)据此上浮到面板之上，
+  // 底部提示语贴在画幅下沿。面板开合 / 窗口缩放 / 面板换行变高时全部自动跟随，不再用写死的 bottom。
+  {
+    const p = document.getElementById('panel');
+    const ph = (panelOpen && p) ? p.offsetHeight : 0;
+    const rs = document.documentElement.style;
+    rs.setProperty('--panel-h', ph + 'px');
+    rs.setProperty('--hint-bottom', Math.max(ph + 16, innerHeight - (top + h) + 14) + 'px');
+  }
   camera.aspect=w/h;camera.updateProjectionMatrix();
   renderer.setPixelRatio(CANVAS_PR); // canvas 固定高分辨率(不随清晰度/动态变→不闪)
   renderer.setSize(w,h);
   renderer.domElement.style.left = left+'px'; // 画幅居中：主画布按黑边偏移定位
   renderer.domElement.style.top  = top+'px';
-  composer.setPixelRatio(curRes);    // 离屏渲染分辨率=清晰度/动态(scene 在此跑，省 fill-rate)
-  composer.setSize(w,h);
+  setComposerPixelSize(w,h);         // 离屏渲染分辨率=清晰度档位(scene 在此跑，省 fill-rate)
   { const s=gtaoSize(); gtaoPass.setSize(s.w,s.h); } // GTAO 保持半分辨率
   // 叠层画布(bloom/grain)：drawing buffer + CSS 尺寸/偏移都跟随画幅矩形，三层严格对齐
   if(typeof resizeBloom==='function') resizeBloom();
@@ -8632,7 +8883,7 @@ layoutViewport();
 // → 动态降/升、切清晰度档位都不重建 canvas 显存 = 不闪。OutputPass 把离屏结果拉伸填满固定 canvas。
 function applyRenderScale(){
   const {w,h}=frameRect();
-  composer.setPixelRatio(curRes); composer.setSize(w,h);
+  setComposerPixelSize(w,h);                     // 整数设备像素，见其定义处的 BUGFIX 说明
   const s=gtaoSize(); gtaoPass.setSize(s.w,s.h); // GTAO 保持半分辨率
   _appliedRes = curRes;
 }
@@ -8649,15 +8900,8 @@ function setAA(on){
     if(rt && rt.samples!==s){ rt.samples=s; rt.dispose(); }
   }
 }
-// 动态分辨率开关：关掉时立刻回到档位分辨率
-function setDynRes(on){ dynResEnabled=!!on; if(!dynResEnabled){ curRes=resStill; applyRenderScale(); } }
-// 交互(拖动/滚轮/键盘/触摸)打时间戳 → animate 据此判断"运动中"
-const _markInteract = ()=>{ _lastInteract = performance.now(); };
-addEventListener('pointerdown', _markInteract, true);
-addEventListener('pointermove', e=>{ if(e.buttons) _markInteract(); }, true);
-addEventListener('wheel', _markInteract, {capture:true, passive:true});
-addEventListener('touchmove', _markInteract, {capture:true, passive:true});
-addEventListener('keydown', _markInteract, true);
+// （setDynRes / 交互时间戳 已删除：不再有"转动时降分辨率"这条路径，
+//   也就不需要追踪"是否在运动中"。分辨率恒为用户选的清晰度档位。）
 setAA(false); // 抗锯齿功能已取消：固定关闭 MSAA
 
 let bloomStrength = 0.45;   // 0.9→0.45：辉光减半，去掉亮窗周围那层发白光晕（可调 0..1）
@@ -8731,8 +8975,7 @@ if(driftOn){
   if(driftPlaying){
     driftT += dt * 0.0168 * driftSpeed; // 帧率无关推进：0.00028×60fps × 速度倍率
     if(driftT >= 1) driftT -= 1;           // 循环回到清晨
-    const sl = document.getElementById('timeSlider');
-    if(sl) sl.value = driftT;              // 播放时滑块跟随移动
+    if(elTimeSlider) elTimeSlider.value = driftT;   // 播放时滑块跟随移动
   }
   const dayPhase = (driftT % 1.0);  // 0→1 线性循环，代表一天进度
 
@@ -8842,7 +9085,7 @@ if(driftOn){
     extB,
     Math.min(1, extB * (1 - warmK*0.35))
   ));
-  scene.backgroundIntensity = extB * 0.45;   // 窗外天空随昼夜明暗（*0.45 压暗，防曝光/bloom冲白）
+  scene.backgroundIntensity = extB * SKY_BG_MUL;   // 窗外天空随昼夜明暗（×SKY_BG_MUL 总系数，见其定义）
   
     // ── Simulated clock time ──────────────────────────────────────────────────
     // Map dayPhase 0→1 to 05:30→22:30 (17 小时窗口，覆盖到晚自习)
@@ -8867,19 +9110,17 @@ if(driftOn){
     else if(hh < 21)            timeLabel = '晚自习';
     else                        timeLabel = '夜间';
 
-    const timeEl = document.getElementById('timeDisplay');
+    const timeEl = elTimeDisp;
     timeEl.textContent = timeStr + '　' + timeLabel;
     timeEl.style.color = 'rgba(240,232,216,0.38)';
     // 时间轴标签同步显示当前时刻
-    const tlLab = document.getElementById('timeSliderLabel');
-    if(tlLab) tlLab.textContent = timeStr;
+    if(elTimeLabel) elTimeLabel.textContent = timeStr;
 
     // ── 自动开关天花板灯：上学(07:00)自动开，晚自习后(21:00)自动关；午休熄灯 ──
     // 仅在“光源漂移”时间推进模式下自动控制；静态模式仍由面板手动开关。
     const ceilShouldBeOn = (totalMinutes >= 7*60 && totalMinutes < 21*60) && !isLunch;
-    const ceilEl = document.getElementById('ceilOn');
-    if(ceilEl.checked !== ceilShouldBeOn){
-      ceilEl.checked = ceilShouldBeOn;
+    if(elCeilOn.checked !== ceilShouldBeOn){
+      elCeilOn.checked = ceilShouldBeOn;
       syncCeiling();
     }
 
@@ -8918,7 +9159,7 @@ if(driftOn){
 
     sync();
   } else {
-    document.getElementById('timeDisplay').style.color = 'rgba(240,232,216,0)';
+    elTimeDisp.style.color = 'rgba(240,232,216,0)';
   }
 
   // Ceiling LED — 快速平滑点亮 / 熄灭（LED 瞬时响应，无频闪）
@@ -8931,7 +9172,7 @@ if(driftOn){
   // HemisphereLight 有非零地板。这里按总光量(窗光+灯光+月光)统一把 IBL/环境光/天光缩到 0：
   // 光越少越黑，全暗时真正全黑；只要有一点光(litTotal≥~0.4)就恢复正常质感，不影响有光时观感。
   const _winI  = +elInt.value;
-  const _ceilI = document.getElementById('ceilOn').checked ? +document.getElementById('ceilInt').value : 0;
+  const _ceilI = elCeilOn.checked ? +elCeilInt.value : 0;
   // 仅"日光/灯光"驱动 env IBL（室内白昼漫反弹）；月光不计入 → 夜晚 IBL/环境光真正归零、场景压暗。
   // 夜间的冷蓝可见度由独立的 moonLight(方向光) 提供，而非这张白昼灰环境贴图。
   const litTotal = _winI + _ceilI * 1.3;
@@ -8942,7 +9183,7 @@ if(driftOn){
   // 近窗明亮、远侧自然沉入暗部，重现"关灯后只有窗边有光"的真实教室观感。
   // 注意：窗侧 windowFills/ceilBounce/floorBounce 是带平方衰减的聚光灯（贴左窗墙），
   // 不受此系数影响 → 关灯后它们仍照亮窗侧，仅"无方向均匀补光"被压暗，形成左亮右暗的渐变。
-  const ceilFillTarget = document.getElementById('ceilOn').checked ? 1.0 : 0.22;
+  const ceilFillTarget = elCeilOn.checked ? 1.0 : 0.22;
   ceilFill += (ceilFillTarget - ceilFill) * 0.08;
   // ceiling-brighten: 灯越亮 → 室内整体漫反射补光越强（模拟更亮的天花板灯具向全室散射的反弹光）。
   // 由 flouroTarget(=bri×π) 归一化驱动；天花板灯关闭(flouroTarget→0)时 ceilBoost→1.0 不变，夜间不受影响。
@@ -9033,7 +9274,7 @@ if(driftOn){
     // 前后门玻璃透走廊光：面光源随走廊电平(与 rWin 同源，白天亦在、被日光自然盖过)；
     // 玻璃自发光随 spill(仅室内暗时显现，避免"死白玻璃")。走廊关灯 → 两者归零。
     for (const d of doorCorridorLeaks){
-      d.light.intensity            = DOOR_RECT_MAX  * lvl01 * curtainDim;
+      d.light.intensity            = DOOR_RECT_MAX  * lvl01 * curtainDim * d.fluxScale; // ×fluxScale：面光源(nit)→聚光(cd) 换算，见 addDoorCorridorGlow
       d.glassMat.emissiveIntensity = DOOR_GLASS_MAX * spill;
     }
   }
@@ -9092,15 +9333,7 @@ if(driftOn){
   grainFrame = (grainFrame + 1) % 3;
   if(grainFrame === 0) drawGrain();
 
-  // ── 动态分辨率：运动中降到 RES_MOVING，松手静止后升回档位分辨率 ──
-  // 只在"目标档位真正切换"的那一刻 setSize 一次(降1次+升1次)；
-  // 绝不每帧 setSize——否则每帧重建离屏目标(叠加 MSAA)会导致画面连续闪烁。
-  if(dynResEnabled){
-    const _n = performance.now();
-    const moving = (_n - _lastInteract < 180) || driftPlaying;
-    const target = moving ? Math.min(resStill, RES_MOVING) : resStill;
-    if(Math.abs(target - curRes) > 0.001){ curRes = target; applyRenderScale(); }
-  }
+  // （动态分辨率已删除：转动时降分辨率＝用模糊补帧，本项目不采用。分辨率全程恒为清晰度档位。）
 
   // 方位罗盘：盘面旋转 = 相机 theta（屏幕上方=面朝方向；北=-Z 在 theta=0 时朝上）
   if(compassRose) compassRose.style.transform = 'rotate('+(theta*180/Math.PI).toFixed(1)+'deg)';
@@ -9112,6 +9345,19 @@ if(driftOn){
     fpsEl.textContent = Math.round(__fpsFrames * 1000 / (__fnow - __fpsLast)) + ' FPS · ' + curRes.toFixed(2) + 'x';
     __fpsFrames = 0; __fpsLast = __fnow;
   }
+})();
+
+// ── 底部操作提示：首次交互后（或 12 秒后）淡出 ─────────────────────────────────
+// 之前只有"抓住光球拖动"这一条路径会把它隐藏，其余情况它会一直挂在画面下沿。
+// 它是一次性的上手提示，看过就该让位给画面。
+(function fadeHintOnFirstUse(){
+  const hint = document.getElementById('hint');
+  if(!hint) return;
+  let gone = false;
+  const hide = ()=>{ if(gone) return; gone = true; hint.style.opacity = '0'; };
+  ['pointerdown','wheel','keydown','touchstart'].forEach(ev =>
+    addEventListener(ev, hide, {once:true, passive:true, capture:true}));
+  setTimeout(hide, 12000);
 })();
 
 // ── Panel collapse ────────────────────────────────────────────────────────────
@@ -9132,14 +9378,13 @@ function toggleSettings(force){
   document.getElementById('settingsBtn').classList.toggle('on', settingsOpen);
 }
 
-// ── 画幅切换：选 2.35 / 21:9 / 16:9 / 4:3，改变 frameAspect 后重排渲染视口(四周黑边) ──
-function setAspect(v){
-  frameAspect = (v==='full') ? 0 : parseFloat(v);   // 'full'=全屏铺满(frameAspect=0)
-  document.querySelectorAll('.aspect-btn').forEach(b=>b.classList.toggle('on', b.dataset.ar===v));
-  layoutViewport();
-}
+// 画幅切换器(setAspect)已删除：选择器 UI 早已移除，页面里不存在任何 [data-ar] 按钮，
+// 而它内部的 querySelectorAll('.aspect-btn') 会连天气/背景/清晰度/机位按钮一起清掉 .on 高亮
+// —— 一旦被误调用就会让四组按钮同时失去选中态。画幅现固定为 16:9(见 frameAspect / FRAME_FILL)。
 document.addEventListener('keydown', e=>{
+  if(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;  // 焦点在滑块上时不抢键
   if(e.key==='Tab'){e.preventDefault();togglePanel();}
+  if(e.key==='t'||e.key==='T'){ toggleDrift(); }                  // T 开关时间轴（日光推移）
   if(e.key==='Escape' && settingsOpen){ toggleSettings(false); }  // Esc 关闭设置浮层
   if(e.key==='1') applyPreset('morning');
   if(e.key==='2') applyPreset('noon');
@@ -9384,6 +9629,28 @@ document.addEventListener('keydown', e=>{
 
   // 入场：下一帧加 .ready 触发交错淡入
   requestAnimationFrame(()=>requestAnimationFrame(()=>cover.classList.add('ready')));
+
+  // ── 着色器预热：把"相机在走廊 / 不在走廊"两套灯数的程序都先编译好 ────────────────
+  // three.js 的着色器程序按"灯的数量"等参数做缓存键；灯数一变就要整套重编，实测首次约 1.9s。
+  // 走进走廊会触发这次切换(见 updateCorridorLightLayer)，若等到那时再编译就是一次两秒的硬卡顿。
+  // 这里趁封面还盖在画面上、用户正在读标题的时候，用 renderer.compile 把两种状态各编译一遍，
+  // 之后任何切换都只是命中缓存(实测 13~30ms，一帧内完成，看不出来)。
+  // 放在 requestIdleCallback 里，避免和封面的入场动画抢同一帧。
+  const warmUpShaderVariants = ()=>{
+    try{
+      // 必须走 applyCorridorLayer()，它同时反向切两层 —— 这才是运行时真正会出现的两种灯数组合。
+      // （只 enable(LAYER_CORRIDOR) 会得到"两层全开"这种第三种组合，编译了也用不上。）
+      // renderer.compile 覆盖不到后处理/透明排序等少数程序变体，所以每种状态**真的渲染一帧**：
+      // 封面此刻正盖在画面上(磨砂玻璃层)，用户看不到，编译完成后再恢复原状态。
+      for(const inCorridor of [true, false]){
+        applyCorridorLayer(inCorridor);
+        renderer.compile(scene, camera);
+        composer.render();
+      }
+      updateCorridorLightLayer(undefined);   // 回到与当前相机位置相符的状态
+    }catch(e){ console.warn('[perf] 着色器预热失败(不影响功能)', e); }
+  };
+  (window.requestIdleCallback || (f=>setTimeout(f, 300)))(warmUpShaderVariants, {timeout:1500});
 
   // 选择时刻 → 实时重照背景场景（applyPreset 为全局函数，onclick 亦调用它）
   hours.forEach(btn=>{

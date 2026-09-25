@@ -109,7 +109,8 @@ canvas{display:block;position:absolute;top:0;left:0;border-radius:12px;}
 }
 #panelToggle:hover{color:var(--t1);}
 /* 主面板现只剩「窗光」一组：单列居中，避免偏左（此规则置于媒体查询之后，各宽度均居中） */
-#panel{grid-template-columns:minmax(240px,360px);justify-content:center;gap:2px 0;}
+/* 三栏：窗光 / 天花板灯 / 走廊灯。窄屏时自动落成一栏，避免挤成一条。 */
+@media (max-width:820px){ #panel{grid-template-columns:minmax(240px,360px);justify-content:center;gap:2px 0;} }
 /* ── 设置浮层（室内三种灯：天花板/走廊/办公室） ── */
 #settingsBtn.on{color:var(--t1);border-color:var(--line-hi);background:var(--chip-bg-hi);}
 #settingsPanel{
@@ -303,7 +304,10 @@ input[type=range]:focus-visible,
 /* ══ 开场封面 · Title screen ═══════════════════════════════════════════ */
 #cover{
   position:fixed; inset:0; z-index:9000;
-  display:flex; flex-direction:column; justify-content:center;
+  /* 居中版式：整块内容水平垂直居中，「进入」按钮落在画面正中偏下 —— 标题屏该有的样子。
+     原本是左对齐的杂志式版式，进入按钮被推到左下角，远离视线落点。 */
+  display:flex; flex-direction:column; justify-content:center; align-items:center;
+  text-align:center;
   padding:clamp(28px,6vw,84px);
   color:var(--warm); cursor:default;
   background:
@@ -336,7 +340,7 @@ input[type=range]:focus-visible,
 .cv-title{ font-family:Georgia,'Times New Roman',serif; font-style:italic; font-weight:400;
   font-size:clamp(54px,12.5vw,172px); line-height:.88; letter-spacing:-.012em; color:var(--warm); }
 .cv-title .amp{ color:var(--amber); font-style:italic; }
-.cv-tagline{ margin-top:clamp(16px,2vw,30px); max-width:40ch; line-height:1.5;
+.cv-tagline{ margin-top:clamp(16px,2vw,30px); max-width:44ch; margin-left:auto; margin-right:auto; line-height:1.5;
   font-size:clamp(15px,1.55vw,23px); font-weight:300; letter-spacing:.005em; color:var(--t1); }
 .cv-tagline .en{ color:var(--t2); }
 
@@ -344,8 +348,8 @@ input[type=range]:focus-visible,
 .cv-choose .lbl{ font-family:ui-monospace,'SF Mono',Menlo,monospace;
   font-size:clamp(10px,1vw,12px); letter-spacing:.34em; text-transform:uppercase;
   color:var(--t3); margin-bottom:15px; }
-.cv-hours{ display:flex; gap:clamp(8px,1vw,14px); flex-wrap:wrap; }
-.cv-hour{ position:relative; font:inherit; cursor:pointer; text-align:left;
+.cv-hours{ display:flex; gap:clamp(8px,1vw,14px); flex-wrap:wrap; justify-content:center; }
+.cv-hour{ position:relative; font:inherit; cursor:pointer; text-align:center;
   background:var(--chip-bg); border:1px solid var(--line); border-radius:var(--radius);
   color:var(--t1); padding:12px 22px 13px; backdrop-filter:var(--blur);
   display:flex; flex-direction:column; gap:3px;
@@ -360,7 +364,7 @@ input[type=range]:focus-visible,
 .cv-hour[data-k="night"].on .en{ color:var(--blue-soft); }
 .cv-hour:focus-visible{ outline:2px solid var(--amber-soft); outline-offset:2px; }
 
-.cv-enter{ margin-top:clamp(28px,4vw,54px); }
+.cv-enter{ margin-top:clamp(28px,4vw,54px); display:flex; justify-content:center; }
 button.cv-go{ font:inherit; cursor:pointer; font-size:clamp(15px,1.45vw,20px); letter-spacing:.06em;
   color:var(--warm); background:transparent; border:1px solid var(--amber-line); border-radius:100px;
   padding:14px 42px; display:inline-flex; align-items:center; gap:15px;
@@ -454,7 +458,7 @@ button.cv-go:focus-visible{ outline:2px solid var(--amber-soft); outline-offset:
   </div>
 </div>
 
-<div class="hint-btm" id="hint">拖动旋转视角 · 拖动光球移动光源 · 滚轮缩放 · WASD 漫游 · T 时间轴 · Tab 收面板</div>
+<div class="hint-btm" id="hint">拖动旋转视角 · 拖动光球移动光源 · 滚轮缩放 · WASD 漫游 · T 时间轴 · F 全屏 · Tab 收面板</div>
 <div id="timeDisplay"></div>
 <div id="fpsMeter">-- FPS</div>
 <div id="compass" title="方位罗盘：屏幕上方=你面朝的方向"><div id="compassRose"><b class="cn">N</b><b class="ce">E</b><b class="cs">S</b><b class="cw">W</b></div></div>
@@ -462,23 +466,58 @@ button.cv-go:focus-visible{ outline:2px solid var(--amber-soft); outline-offset:
 <!-- 收起/展开手柄：必须是 #panel 的兄弟节点(不能放进 #panel 内)——#panel 收起时用 transform:translateY(100%)，
      transform 会成为其内 position:fixed 子元素的包含块，若手柄在里面会随面板一起滑出屏幕外 → 收起后无法再点开。 -->
 <button id="panelToggle" onclick="togglePanel()">▼ 收起面板</button>
+<!-- 底部主面板：三盏光并排 —— 太阳(窗光) / 天花板灯 / 走廊灯。
+     天花板灯与走廊灯原本收在 ⚙ 设置浮层里，要调"开灯 vs 太阳"的配比得先开浮层、
+     而浮层又盖在画面右上角挡着看不到效果。现在三者同屏，开关和滑块一眼可达、互相对照着调。 -->
 <div id="panel">
-  <!-- Key light（窗光=自然光，配合预设/时间轴，留在主面板作主要艺术控制） -->
+  <!-- Key light（窗光=自然光，配合预设/时间轴，主要艺术控制） -->
   <div class="pcol">
     <div class="ptitle g"><div class="ldot" id="mDot" style="background:#d4a84b;box-shadow:0 0 5px rgba(212,168,75,.7)"></div>窗光 · Window Light<input type="checkbox" id="curtainOn" style="display:none"></div>
     <div class="row"><label>强度</label><input type="range" class="g" id="mInt" min="0" max="5" value="1.8" step="0.05"><span class="val" id="mIntv">1.80</span></div>
     <div class="row"><label>色温</label><input type="range" class="g" id="mTemp" min="0" max="1" value="0.65" step="0.01"><span class="val" id="mTempv">暖</span></div>
     <div class="row"><label>角度</label><input type="range" class="g" id="mAngle" min="-80" max="80" value="-35" step="1"><span class="val" id="mAnglev">-35°</span></div>
   </div>
+  <!-- Ceiling LED -->
+  <div class="pcol">
+    <div class="ptitle b">
+      <div class="ldot" id="cDot" style="background:#cfe2ff;box-shadow:0 0 5px rgba(207,226,255,.7)"></div>天花板灯 · Ceiling LED
+      <div class="tog-row"><label for="ceilOn">开启</label><label class="tog"><input type="checkbox" id="ceilOn" checked><span class="togs"></span></label></div>
+    </div>
+    <div class="row"><label>亮度</label><input type="range" class="b" id="ceilInt" min="0" max="2" value="1.8" step="0.05"><span class="val" id="ceilIntv">1.80</span></div>
+    <div class="row"><label>色温</label><input type="range" class="b" id="ceilTemp" min="0" max="1" value="0.5" step="0.01"><span class="val" id="ceilTempv">白</span></div>
+  </div>
+  <!-- Corridor light -->
+  <div class="pcol">
+    <div class="ptitle b">
+      <div class="ldot" id="rDot" style="background:#eaf0ff;box-shadow:0 0 5px rgba(234,240,255,.7)"></div>走廊灯 · Corridor
+      <div class="tog-row"><label for="corrOn">开启</label><label class="tog"><input type="checkbox" id="corrOn" checked><span class="togs"></span></label></div>
+    </div>
+    <div class="row"><label>亮度</label><input type="range" class="b" id="corrInt" min="0" max="1.5" value="1.0" step="0.05"><span class="val" id="corrIntv">1.00</span></div>
+  </div>
 </div>
 
 <!-- 设置浮层：室内三种灯(天花板/走廊/办公室)参数从主面板移到这里，点⚙开合、Esc/×关闭 -->
 <div id="settingsPanel" class="hidden">
   <div id="settingsHead">
-    <span>⚙ 设置 · 室内灯光</span>
+    <span>⚙ 设置 · 画幅 / 机位 / 天气</span>
     <button id="settingsClose" onclick="toggleSettings(false)" title="关闭 (Esc)">✕</button>
   </div>
   <div id="settingsBody">
+    <!-- 画幅 Frame：比例 + 大小。画面是一块可伸缩的"屏"，想铺满就铺满，也可锁成电影比例。 -->
+    <div class="pcol">
+      <div class="ptitle">🖼 画幅 · Frame</div>
+      <div class="q-cap">比例</div>
+      <div class="aspect-row" style="flex-wrap:wrap;gap:5px">
+        <button class="aspect-btn ar-btn"    data-ar="full" onclick="setAspect('full')">铺满</button>
+        <button class="aspect-btn ar-btn on" data-ar="1.7778" onclick="setAspect('1.7778')">16:9</button>
+        <button class="aspect-btn ar-btn"    data-ar="2.3333" onclick="setAspect('2.3333')">21:9</button>
+        <button class="aspect-btn ar-btn"    data-ar="2.35" onclick="setAspect('2.35')">2.35:1</button>
+        <button class="aspect-btn ar-btn"    data-ar="1.3333" onclick="setAspect('1.3333')">4:3</button>
+      </div>
+      <div class="q-cap" style="margin-top:9px">画面大小 · 拖到 100% 即顶满</div>
+      <div class="row"><label>大小</label><input type="range" class="g" id="frameFill" min="0.55" max="1" value="0.94" step="0.01" data-nosync><span class="val" id="frameFillv">94%</span></div>
+      <div class="q-cap" style="opacity:.62">F 键 = 浏览器全屏 · Tab 收起面板可再大一圈</div>
+    </div>
     <!-- 机位 View：一键切到各区域 -->
     <div class="pcol">
       <div class="ptitle">🎥 机位 · View</div>
@@ -502,23 +541,7 @@ button.cv-go:focus-visible{ outline:2px solid var(--amber-soft); outline-offset:
       </div>
       <div class="q-cap" style="margin-top:9px;opacity:.62">全程恒定分辨率 · 转动不降画质</div>
     </div>
-    <!-- Ceiling LED -->
-    <div class="pcol">
-      <div class="ptitle b">
-        <div class="ldot" id="cDot" style="background:#cfe2ff;box-shadow:0 0 5px rgba(207,226,255,.7)"></div>天花板灯 · Ceiling LED
-        <div class="tog-row"><label for="ceilOn">开启</label><label class="tog"><input type="checkbox" id="ceilOn" checked><span class="togs"></span></label></div>
-      </div>
-      <div class="row"><label>亮度</label><input type="range" class="b" id="ceilInt" min="0" max="2" value="1.8" step="0.05"><span class="val" id="ceilIntv">1.80</span></div>
-      <div class="row"><label>色温</label><input type="range" class="b" id="ceilTemp" min="0" max="1" value="0.5" step="0.01"><span class="val" id="ceilTempv">白</span></div>
-    </div>
-    <!-- Corridor light -->
-    <div class="pcol">
-      <div class="ptitle b">
-        <div class="ldot" id="rDot" style="background:#eaf0ff;box-shadow:0 0 5px rgba(234,240,255,.7)"></div>走廊灯 · Corridor
-        <div class="tog-row"><label for="corrOn">开启</label><label class="tog"><input type="checkbox" id="corrOn" checked><span class="togs"></span></label></div>
-      </div>
-      <div class="row"><label>亮度</label><input type="range" class="b" id="corrInt" min="0" max="1.5" value="1.0" step="0.05"><span class="val" id="corrIntv">1.00</span></div>
-    </div>
+    <!-- 天花板灯 / 走廊灯 已移到底部主面板，与窗光(太阳)并排，方便对照着调 -->
     <!-- Weather · 窗外天气 -->
     <div class="pcol">
       <div class="ptitle">🌤 天气 · Weather</div>
@@ -4888,17 +4911,20 @@ function viewSize(){
 }
 // 画幅：把渲染矩形约束成所选比例(16:9 默认 / 2.35 / 21:9 / 4:3)，在可用区内居中，
 // 四周露出的黑色 body 即上下(letterbox)或左右(pillarbox)黑边。
-const frameAspect = 16/9; // 固定 16:9 画幅（不铺满屏幕，四周留黑边）；画幅选择器已删除
-// 画面占可用区的比例：<1 → 画幅四周留一圈黑边，网页打开时画面不沾满整个屏幕（画框感）。
+// 画幅比例：0 = 不锁比例(铺满可用区)；否则锁成该宽高比，多出来的部分留黑边。
+// 由 ⚙设置 → 画幅 里的比例按钮写入（setAspect）。
+let frameAspect = 16/9;
+// 画面占可用区的比例：<1 → 画幅四周留一圈黑边（画框感）；1 = 顶到边。
 // 原值 0.88 同时兼着"少渲染 23% 像素"的提帧任务；现在片元成本已降到原来的 1/5（见顶部
-// makeSpotLightsDiffuseOnly / LAYER_CORRIDOR），不必再拿画面大小换帧率 → 提到 0.94，
-// 画面明显更大更沉浸，仍保留四周那圈黑框。像素数只增加约 14%，实测仍稳在 90 FPS 以上。
-const FRAME_FILL = 0.94;
+// makeSpotLightsDiffuseOnly / LAYER_CORRIDOR），不必再拿画面大小换帧率。
+// 由 ⚙设置 → 画幅 里的「画面大小」滑块写入（setFrameFill）；默认 0.94。
+let FRAME_FILL = 0.94;
 function frameRect(){
   const av = viewSize();
   const aw = Math.max(1, Math.round(av.w * FRAME_FILL));   // 内缩后的可用区
   const ah = Math.max(1, Math.round(av.h * FRAME_FILL));
   // 竖屏/近方屏(手机)强套 16:9 会把画面压成一条窄带 → 那里只做内缩，不锁比例。
+  // frameAspect=0 表示用户选了「铺满」，同样不锁比例。
   const ar = (av.w / av.h >= 1.2) ? frameAspect : 0;
   let w, h;
   if(!ar){ w = aw; h = ah; }                                // 0=不限比例：只做内缩
@@ -7291,18 +7317,49 @@ let wxSun=1, wxFillMul=1, wxSunGrey=0, wxHemiGrey=0;   // 天气光照因子（�
 const WX_LIGHT = {
   clear:  {sun:1.00, fill:1.00, sunGrey:0.00, hemiGrey:0.00, exp:1.00},
   cloudy: {sun:0.40, fill:1.28, sunGrey:0.55, hemiGrey:0.46, exp:0.95},
-  rain:   {sun:0.08, fill:1.18, sunGrey:0.78, hemiGrey:0.64, exp:0.82},   // 无直射，只剩微弱冷灰漫射
+  // rain.sun 0.08→0.20：0.08 时雨天几乎没有方向性光，拖"角度"滑块画面差只有 1.02/255（等于没反应）。
+  // 0.20 仍是四种天气里最暗最平的（低强度下整体亮度 54.2→54.5，几乎不变），
+  // 但角度响应翻倍到 2.29、强度响应 4.75→6.67 —— 厚云层后面那点方向性依然存在，控件也就有了反馈。
+  rain:   {sun:0.20, fill:1.18, sunGrey:0.78, hemiGrey:0.64, exp:0.82},   // 直射极弱，以冷灰漫射为主
   snow:   {sun:0.50, fill:1.34, sunGrey:0.55, hemiGrey:0.52, exp:1.00},
 };
-// 每帧在 sync()/光照计算之后覆盖：弱化直射太阳、冷灰化、淡出阳光柱/地面光斑
+// ══ BUGFIX：天气因子曾经"逐帧复利"，把太阳直接乘成 0 ═════════════════════════════
+// 原实现是就地做乘法/lerp：`mainLight.intensity *= wxSun`、`color.lerp(灰, k)`。
+// 而 applyWeatherLighting() **每帧**都跑，写入这些值的 sync()/updateWindowPatches()
+// 却只在"拖滑块 / 切预设"时跑一次（只有开着时间轴时 sync 才逐帧执行）。
+// 于是静态模式下每帧都在上一帧的结果上再乘一次 —— 实测滑块设到 4.0：
+//   晴天 4→4→4（wxSun=1，乘法恰好是恒等，所以晴天看不出问题）
+//   阴天 1.6→0.64→0.256→0.10→0.04…   雨天 0.32→0.026→0.002→0（5 帧内归零）
+// 表现就是：切到阴/雨/雪之后，拖"强度"只闪一帧就黑回去，拖"角度"更是毫无反应
+// （太阳强度已经是 0，转它的方向当然什么都看不见）。色温同理被 lerp 收敛到同一个冷灰。
+//
+// 修法：天气因子改成**幂等赋值** —— 从基准值算出结果，而不是在现值上叠加。
+// 基准值由真正的所有者（sync / updateWindowPatches / 预设 / 漂移）写完后快照一次，
+// 见下方 wxCaptureBase()。这样 applyWeatherLighting 跑多少帧结果都一样。
+const wxBase = {
+  sunI: 0,
+  sunColor: new THREE.Color(1,1,1),
+  hemiColor: new THREE.Color(1,1,1),
+};
+// 在"晴天基准"写完之后调用：把天气要加工的那几个量拍一张快照。
+// 调用点在 sync() 末尾 —— 预设(applyPreset)与时间轴(drift)两条路径最后都会走到 sync()。
+function wxCaptureBase(){
+  wxBase.sunI = mainLight.intensity;
+  wxBase.sunColor.copy(mainLight.color);
+  wxBase.hemiColor.copy(hemiLight.color);
+  if(typeof winShafts!=='undefined') winShafts.forEach(o=>{ if(o.material) o.userData.wxBaseOp = o.material.opacity; });
+  if(typeof winPatches!=='undefined') winPatches.forEach(o=>{ if(o.material) o.userData.wxBaseOp = o.material.opacity; });
+}
+// 每帧在 sync()/光照计算之后覆盖：弱化直射太阳、冷灰化、淡出阳光柱/地面光斑。
+// 全部是"由基准值赋值"，重复执行不会累积。
 function applyWeatherLighting(){
-  mainLight.intensity *= wxSun;
+  mainLight.intensity = wxBase.sunI * wxSun;
+  mainLight.color.copy(wxBase.sunColor);
   if(wxSunGrey>0)  mainLight.color.lerp(_wxGrey, wxSunGrey);
+  hemiLight.color.copy(wxBase.hemiColor);
   if(wxHemiGrey>0) hemiLight.color.lerp(_wxGrey, wxHemiGrey);
-  if(wxSun<0.9){
-    if(typeof winShafts!=='undefined') winShafts.forEach(o=>{ if(o.material) o.material.opacity *= wxSun; });
-    if(typeof winPatches!=='undefined') winPatches.forEach(o=>{ if(o.material) o.material.opacity *= wxSun; });
-  }
+  if(typeof winShafts!=='undefined') winShafts.forEach(o=>{ if(o.material && o.userData.wxBaseOp!==undefined) o.material.opacity = o.userData.wxBaseOp * wxSun; });
+  if(typeof winPatches!=='undefined') winPatches.forEach(o=>{ if(o.material && o.userData.wxBaseOp!==undefined) o.material.opacity = o.userData.wxBaseOp * wxSun; });
 }
 
 // ── 雨/雪粒子：西墙外静态体积(x<-8，窗朝向那侧)，落到底回收；不落进教室 ──────────
@@ -8546,9 +8603,15 @@ function sync(){
   updateWindowPatches(angle, driftSunElev);
 
   syncCeiling();
+  // 天气因子的基准快照：必须放在 sync() 最末尾（updateWindowPatches 之后），
+  // 此时 mainLight / hemiLight / 光柱光斑 都还是"晴天该有的值"。
+  // applyWeatherLighting() 每帧据此幂等地算出当前天气下的结果，不再逐帧叠加。见其定义处的 BUGFIX 说明。
+  wxCaptureBase();
 }
 // 含 #settingsPanel：天花板灯亮度/色温滑块已移入设置浮层，同样要触发 sync()
-document.querySelectorAll('#panel input, #settingsPanel input').forEach(el=>el.addEventListener('input',()=>{sync();markCustom();}));
+// :not([data-nosync]) —— 面板里并非每个 input 都是灯光参数（如「画面大小」只改画幅），
+// 不排除的话拖一下画幅滑块就会触发 sync()+markCustom()，把当前预设误标成「自定义」。
+document.querySelectorAll('#panel input:not([data-nosync]), #settingsPanel input:not([data-nosync])').forEach(el=>el.addEventListener('input',()=>{sync();markCustom();}));
 document.getElementById('ceilOn').addEventListener('change',()=>{sync();markCustom();});
 document.getElementById('corrOn').addEventListener('change',()=>{syncCorridor();markCustom();});
 document.getElementById('corrInt').addEventListener('input',()=>{syncCorridor();markCustom();});
@@ -9378,13 +9441,50 @@ function toggleSettings(force){
   document.getElementById('settingsBtn').classList.toggle('on', settingsOpen);
 }
 
-// 画幅切换器(setAspect)已删除：选择器 UI 早已移除，页面里不存在任何 [data-ar] 按钮，
-// 而它内部的 querySelectorAll('.aspect-btn') 会连天气/背景/清晰度/机位按钮一起清掉 .on 高亮
-// —— 一旦被误调用就会让四组按钮同时失去选中态。画幅现固定为 16:9(见 frameAspect / FRAME_FILL)。
+// ── 画幅：比例 + 大小（⚙设置 → 画幅）─────────────────────────────────────────────
+// 注意用 .ar-btn 而不是 .aspect-btn 来做高亮查询：.aspect-btn 只是外观类，
+// 天气/窗外背景/清晰度/机位按钮也都用它 —— 早先那版 setAspect 用 .aspect-btn 查询，
+// 会把那四组按钮的 .on 选中态一起清掉。
+function setAspect(v){
+  frameAspect = (v==='full') ? 0 : parseFloat(v);   // 'full'=不锁比例
+  document.querySelectorAll('.ar-btn').forEach(b=>b.classList.toggle('on', b.dataset.ar===v));
+  // 「铺满」= 真的顶满：既不锁比例，也把画面大小推到 100%（否则还留着一圈黑边，名不副实）。
+  // 之后再拖「画面大小」滑块就能随意缩回去 —— 这就是"可伸缩的屏"。
+  if(v==='full'){
+    const el = document.getElementById('frameFill');
+    if(el) el.value = 1;
+    setFrameFill(1);            // 内含 layoutViewport()
+    return;
+  }
+  layoutViewport();
+}
+// 画面大小：0.55~1。1 = 画面顶满可用区(上下左右不留黑边)。
+function setFrameFill(v){
+  FRAME_FILL = Math.max(0.3, Math.min(1, parseFloat(v)||0.94));
+  const lab = document.getElementById('frameFillv');
+  if(lab) lab.textContent = Math.round(FRAME_FILL*100) + '%';
+  layoutViewport();
+}
+{
+  const el = document.getElementById('frameFill');
+  if(el){ el.addEventListener('input', ()=>setFrameFill(el.value)); setFrameFill(el.value); }
+}
+// F = 浏览器全屏（真正意义上的"占满屏"：连浏览器的标签栏/地址栏都让出来）。
+// 退出全屏由浏览器自己的 Esc 处理；全屏前后窗口尺寸变化会触发 resize → layoutViewport 自动重排。
+function toggleFullscreen(){
+  const d = document;
+  if(d.fullscreenElement || d.webkitFullscreenElement){
+    (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+  } else {
+    const e = d.documentElement;
+    (e.requestFullscreen || e.webkitRequestFullscreen).call(e).catch(err=>console.warn('[ui] 全屏被拒绝', err));
+  }
+}
 document.addEventListener('keydown', e=>{
   if(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;  // 焦点在滑块上时不抢键
   if(e.key==='Tab'){e.preventDefault();togglePanel();}
   if(e.key==='t'||e.key==='T'){ toggleDrift(); }                  // T 开关时间轴（日光推移）
+  if(e.key==='f'||e.key==='F'){ toggleFullscreen(); }             // F 浏览器全屏
   if(e.key==='Escape' && settingsOpen){ toggleSettings(false); }  // Esc 关闭设置浮层
   if(e.key==='1') applyPreset('morning');
   if(e.key==='2') applyPreset('noon');

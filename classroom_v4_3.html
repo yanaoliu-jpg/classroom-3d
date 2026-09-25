@@ -286,6 +286,38 @@ input[type=range]:focus-visible,
   background:rgba(212,168,75,.22); border-color:var(--amber-line); color:var(--amber);
 }
 
+/* ── 监控墙：把各机位的实时画面平铺成一面监控屏 ── */
+/* WebGL 那一侧用 scissor 把每个机位画进对应的小窗；这一层 DOM 只负责边框、标签和点击，
+   这样标签是真正的文字(不受画布分辨率影响)，点哪一格就跳到哪个机位。 */
+#monitorGrid{
+  position:fixed; z-index:6; display:none;
+  pointer-events:none;   /* 容器不挡事件，只有格子本身可点 */
+}
+#monitorGrid.on{ display:block; }
+.mon-cell{
+  position:absolute; pointer-events:auto; cursor:pointer;
+  /* 必须显式透明：这是个 <button>，浏览器默认给它一块浅色底 —— 不清掉就会整片盖住下面的 WebGL 画面
+     （表现为六个格子全是白的，而画布里其实已经画好了）。padding/font 也一并清掉。 */
+  background:transparent; padding:0; font:inherit; color:inherit; -webkit-appearance:none; appearance:none;
+  border:1px solid rgba(255,255,255,.10);
+  transition:border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.mon-cell:hover{ border-color:var(--amber-line); box-shadow:inset 0 0 0 1px var(--amber-tint), 0 0 24px -6px rgba(212,168,75,.5); }
+.mon-cell:focus-visible{ outline:2px solid var(--amber-soft); outline-offset:-2px; }
+.mon-cell .tag{
+  position:absolute; left:8px; top:7px;
+  font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:10px; letter-spacing:.14em;
+  color:var(--t1); background:rgba(8,8,12,.62); backdrop-filter:blur(6px);
+  border:1px solid var(--line); border-radius:4px; padding:2px 7px; white-space:nowrap;
+}
+.mon-cell .rec{
+  position:absolute; right:8px; top:8px; width:6px; height:6px; border-radius:50%;
+  background:#e0574a; box-shadow:0 0 7px rgba(224,87,74,.85); animation:monRec 2.4s ease-in-out infinite;
+}
+@keyframes monRec{ 0%,100%{opacity:1} 50%{opacity:.25} }
+.mon-cell.live .tag{ color:var(--amber); border-color:var(--amber-line); }
+@media (prefers-reduced-motion:reduce){ .mon-cell .rec{ animation:none; } }
+
 /* ── Film grain overlay ── */
 #grainCanvas{
   position:fixed !important;top:0;left:0;width:100%;height:100%;
@@ -430,10 +462,13 @@ button.cv-go:focus-visible{ outline:2px solid var(--amber-soft); outline-offset:
 </div>
 
 <div id="topBtns">
+  <button class="top-btn" id="monitorBtn" onclick="toggleMonitor()" title="监控墙：所有机位的实时画面平铺成一面监控屏（快捷键 M），点任一格跳到该机位">▦ 监控墙</button>
   <button class="top-btn" id="driftBtn" onclick="toggleDrift()" title="日光推移：一天 05:30→22:30 连续演示（快捷键 T）">⏱ 时间轴</button>
   <button class="top-btn" id="shotBtn" onclick="takeShot()" title="保存当前画面为 PNG（含辉光与暗角）">↓ 截图</button>
   <button class="top-btn" id="settingsBtn" onclick="toggleSettings()" title="机位 / 清晰度 / 室内灯 / 天气（Esc 关闭）">⚙ 设置</button>
 </div>
+
+<div id="monitorGrid"></div>
 
 <!-- ══ 时间轴（光源漂移）：一天 05:30→22:30 连续推移，太阳东升西落 ══════════════════
      BUGFIX：这段 UI 此前整块缺失 —— CSS(#timeline/.tl-btn/#timeSlider/.tl-speed…)、
@@ -458,7 +493,7 @@ button.cv-go:focus-visible{ outline:2px solid var(--amber-soft); outline-offset:
   </div>
 </div>
 
-<div class="hint-btm" id="hint">拖动旋转视角 · 拖动光球移动光源 · 滚轮缩放 · WASD 漫游 · T 时间轴 · F 全屏 · Tab 收面板</div>
+<div class="hint-btm" id="hint">拖动旋转视角 · 拖动光球移动光源 · 滚轮缩放 · WASD 漫游 · T 时间轴 · M 监控墙 · F 全屏 · Tab 收面板</div>
 <div id="timeDisplay"></div>
 <div id="fpsMeter">-- FPS</div>
 <div id="compass" title="方位罗盘：屏幕上方=你面朝的方向"><div id="compassRose"><b class="cn">N</b><b class="ce">E</b><b class="cs">S</b><b class="cw">W</b></div></div>
@@ -4896,6 +4931,9 @@ const renderer=new THREE.WebGLRenderer({antialias:false,preserveDrawingBuffer:tr
 //   CANVAS_PR(canvas 固定倍率) 与 curRes(清晰度档位) 决定，留着只会误导后来改代码的人。）
 // 控制面板展开时，画面收缩到面板上方，避免底部教室被面板遮住看不到。
 let panelOpen = true;
+// 监控墙开关。必须在这里声明：animate 循环(约 9200 行)和 layoutViewport 都早于监控墙那段代码执行，
+// 而 let/const 在声明前是暂时性死区 —— 连 typeof 都会抛，不像 var 那样返回 'undefined'。
+let monitorOn = false;
 // 时间轴条的净高(含上下留白)：打开时从可用区里扣掉这一条，画幅相应上移变小，
 // 时间轴就永远压不到画面上；关掉时画幅自动长回去。
 const TIMELINE_STRIP = 64;
@@ -7256,55 +7294,198 @@ let currentWeather = 'clear';  // 默认晴天
 let skyBlue = true;
 const BLACK_BG = new THREE.Color(0x000000);
 
-// ════════ 窗外真 3D 环境：equirect 环境图作为 scene.background ════════════════════
-// 一张等距柱状全景(上半天空+云，下半地面+地平线)放进 scene.background：不受相机远面裁剪、
-// 天生正确的旋转视差，透过窗看到的是真实天空/地平线/地面。懒加载，只建当前天气。
-function makeEnvTex(kind){
-  const W=2048,H=1024,cv=document.createElement('canvas');cv.width=W;cv.height=H;
-  const ctx=cv.getContext('2d'); const hV=Math.round(H*0.5);
-  const rgba=(c,a)=>'rgba('+c[0]+','+c[1]+','+c[2]+','+a+')';
-  const lerp=(a,b,t)=>a+(b-a)*t, sstep=(e0,e1,x)=>{let t=Math.max(0,Math.min(1,(x-e0)/(e1-e0)));return t*t*(3-2*t);};
-  const P={
-    // 晴天：地平线不再是近白的雾带（窗口高度正好只看到那一条 → 窗外发灰）。
-    // 整条渐变都保持蓝，只在最贴近地平线处稍微提亮，透过窗看出去就是"蓝天的颜色"。
-    clear: {zen:[46,112,196],mid:[86,152,218],hor:[142,192,232],sun:true, lo:0.52,hi:0.74,top:[255,255,255],bot:[200,214,230],cov:0.9, gN:[104,124,80], gF:[150,168,120]},
-    cloudy:{zen:[130,139,149],mid:[162,170,179],hor:[198,203,208],sun:false,lo:0.30,hi:0.60,top:[220,225,231],bot:[142,151,161],cov:1.0, gN:[104,110,96], gF:[150,157,140]},
-    rain:  {zen:[60,68,79],  mid:[84,93,103], hor:[112,120,129],sun:false,lo:0.28,hi:0.56,top:[128,137,147],bot:[48,54,62], cov:1.0, gN:[60,66,60],  gF:[92,98,90]},
-    snow:  {zen:[140,152,166],mid:[184,195,206],hor:[218,226,233],sun:false,lo:0.32,hi:0.60,top:[244,248,252],bot:[178,189,200],cov:1.0, gN:[226,232,237],gF:[210,220,228]},
-  }[kind];
-  const g=ctx.createLinearGradient(0,0,0,hV);
-  g.addColorStop(0,rgba(P.zen,1));g.addColorStop(0.7,rgba(P.mid,1));g.addColorStop(1,rgba(P.hor,1));
-  ctx.fillStyle=g;ctx.fillRect(0,0,W,hV);
-  if(P.sun){const sx=W*0.5,sy=hV*0.58,rg=ctx.createRadialGradient(sx,sy,0,sx,sy,hV*0.7);
-    rg.addColorStop(0,'rgba(255,251,236,0.85)');rg.addColorStop(0.2,'rgba(255,246,214,0.35)');rg.addColorStop(1,'rgba(255,246,214,0)');
-    ctx.fillStyle=rg;ctx.fillRect(0,0,W,hV);}
-  const seed={clear:7,cloudy:19,rain:31,snow:43}[kind]||3;
+// ════════ 窗外真 3D 环境：equirect 全景作为 scene.background ══════════════════════
+// 一张等距柱状全景(上半天空+云，下半地平线以下的 haze)放进 scene.background：不受相机远面
+// 裁剪、天生正确的旋转视差，透过窗看到的就是真实天空。
+//
+// 结构分两层，因为两者的更新频率差了几个数量级：
+//   ① 云层 —— fbm 噪声，2048×512 每像素 5 个倍频，算一次要几十毫秒。**每种天气只算一次**，
+//      缓存成一张离屏 canvas（只存灰度+alpha，不带颜色），之后永远复用。
+//   ② 天空色 —— 随一天的时间连续变化（黎明靛蓝泛紫 → 日出地平红橙 → 上午清蓝 →
+//      夕照橙红 → 入夜深蓝）。重绘只是两道线性渐变 + 一个径向日晕 + 把云层贴上去，很便宜。
+// 全局只有一张 canvas / 一个 CanvasTexture，重绘就地覆盖后置 needsUpdate —— 不会堆纹理。
+const SKY_W = 1024, SKY_H = 512;   // 透过窗看的一条带，1024×512 足够；更大只是白白增加每次上传的字节数
+
+// ── 云层：每种天气一张，只算一次 ───────────────────────────────────────────────
+// 输出是一张 RGBA canvas：RGB 记录云的明暗(亮部/暗部由 lit 插值)，A 记录覆盖度。
+// 上色时直接 drawImage 叠加即可，再按当时的天空色做一次 'source-atop' 染色。
+const _cloudCache = {};
+function cloudLayerFor(kind){
+  if(_cloudCache[kind]) return _cloudCache[kind];
+  const P = WX_SKY[kind];
+  const cw = 512, ch = Math.round(cw * (SKY_H*0.5) / SKY_W);
+  const cc = document.createElement('canvas'); cc.width = cw; cc.height = ch;
+  const cx = cc.getContext('2d'), im = cx.createImageData(cw, ch);
+  const seed = {clear:7, cloudy:19, rain:31, snow:43}[kind] || 3;
+  const lerp = (a,b,t)=>a+(b-a)*t;
+  const sstep = (e0,e1,x)=>{const t=Math.max(0,Math.min(1,(x-e0)/(e1-e0)));return t*t*(3-2*t);};
   const hash=(x,y)=>{let n=(x*374761393+y*668265263+seed*362437)|0;n=(n^(n>>>13))*1274126177|0;return((n^(n>>>16))>>>0)/4294967295;};
   const sm=t=>t*t*(3-2*t);
-  const vn=(x,y)=>{const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi;const a=hash(xi,yi),b=hash(xi+1,yi),c=hash(xi,yi+1),d=hash(xi+1,yi+1);const u=sm(xf),v=sm(yf);return lerp(lerp(a,b,u),lerp(c,d,u),v);};
+  const vn=(x,y)=>{const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi;
+    const a=hash(xi,yi),b=hash(xi+1,yi),c=hash(xi,yi+1),d=hash(xi+1,yi+1);
+    const u=sm(xf),v=sm(yf);return lerp(lerp(a,b,u),lerp(c,d,u),v);};
   const fbm=(x,y)=>{let f=0,am=0.5,fr=1,s=0;for(let o=0;o<5;o++){f+=am*vn(x*fr,y*fr);s+=am;am*=0.5;fr*=2;}return f/s;};
-  const cw=512,ch=Math.round(cw*hV/W);const cc=document.createElement('canvas');cc.width=cw;cc.height=ch;
-  const cx2=cc.getContext('2d'),im=cx2.createImageData(cw,ch);
   for(let y=0;y<ch;y++)for(let x=0;x<cw;x++){
-    const raw=fbm(x/cw*9.0,y/ch*3.2);
-    let cov=sstep(P.lo,P.hi,raw)*P.cov; const lit=sstep(P.lo,P.hi+0.10,raw);
-    cov*=sstep(0.02,0.2,y/ch)*(1-Math.pow(y/ch,2)*0.6);
+    const raw = fbm(x/cw*9.0, y/ch*3.2);
+    let cov = sstep(P.lo, P.hi, raw) * P.cov;
+    const lit = sstep(P.lo, P.hi+0.10, raw);
+    cov *= sstep(0.02, 0.2, y/ch) * (1 - Math.pow(y/ch,2)*0.6);   // 越靠天顶云越稀
     const i=(y*cw+x)*4;
-    im.data[i]=lerp(P.bot[0],P.top[0],lit);im.data[i+1]=lerp(P.bot[1],P.top[1],lit);im.data[i+2]=lerp(P.bot[2],P.top[2],lit);
+    const v = Math.round(lerp(120, 255, lit));                     // 灰度：暗部→亮部
+    im.data[i]=v; im.data[i+1]=v; im.data[i+2]=v;
     im.data[i+3]=Math.max(0,Math.min(1,cov))*255;
   }
-  cx2.putImageData(im,0,0);ctx.imageSmoothingEnabled=true;ctx.drawImage(cc,0,0,cw,ch,0,0,W,hV);
-  // 下半=地平线以下：不再画绿色地面/远树线（用户要求窗外就是"蓝天的颜色"）。
-  // 改成 地平线雾白 → 天空中段 → 略深的天蓝 的柔和 haze：从窗口向下看也仍是天空，
-  // 不会出现一条灰绿色的地面带把窗口染浊。
-  const low=[Math.round(lerp(P.mid[0],P.zen[0],0.55)),Math.round(lerp(P.mid[1],P.zen[1],0.55)),Math.round(lerp(P.mid[2],P.zen[2],0.55))];
-  const gg=ctx.createLinearGradient(0,hV,0,H);
-  gg.addColorStop(0,rgba(P.hor,1));gg.addColorStop(0.35,rgba(P.mid,1));gg.addColorStop(1,rgba(low,1));
-  ctx.fillStyle=gg;ctx.fillRect(0,hV,W,H-hV);
-  const t=new THREE.CanvasTexture(cv);t.colorSpace=THREE.SRGBColorSpace;t.mapping=THREE.EquirectangularReflectionMapping;
-  return t;
+  cx.putImageData(im,0,0);
+  return (_cloudCache[kind] = cc);
 }
-const _envCache={}; const envTexFor=k=>_envCache[k]||(_envCache[k]=makeEnvTex(k));
+
+// 每种天气的云形状参数 + "把天空色往灰里拉"的程度。
+// grey：0=完全用时间色(晴天)，越大越阴沉；阴雨雪仍保留昼夜明暗，只是被灰吃掉大部分彩度。
+const WX_SKY = {
+  clear: { lo:0.52, hi:0.74, cov:0.90, grey:0.00, greyRGB:[150,160,172] },
+  cloudy:{ lo:0.30, hi:0.60, cov:1.00, grey:0.74, greyRGB:[150,158,168] },
+  rain:  { lo:0.28, hi:0.56, cov:1.00, grey:0.86, greyRGB:[ 84, 92,102] },
+  snow:  { lo:0.32, hi:0.60, cov:1.00, grey:0.70, greyRGB:[196,206,216] },
+};
+
+// ── 一天的天空色卡 ────────────────────────────────────────────────────────────
+// p 是 dayPhase(0 = 05:30，1 = 22:30，与渲染循环里的时钟映射一致)。
+// 每档给：天顶色 / 中段色 / 地平色 / 日晕色 / 日晕强度。相邻档之间线性插值 → 颜色连续流动。
+// 设计意图（用户要求"清晨是蓝色，太阳出来以后蓝色泛红"）：
+//   天顶几乎全程保持蓝，红/橙只出现在**地平线附近**并随日出日落涨落 —— 这既是真实大气的样子
+//   （瑞利散射让天顶恒蓝，低角度阳光穿过更厚大气才泛红），透过窗看也正好是"蓝天泛红"。
+const SKY_KEYS = [
+  { p:0.00, zen:[ 10, 14, 34], mid:[ 16, 22, 48], hor:[ 26, 32, 62], glow:[ 40, 50, 90], ga:0.00 }, // 夜
+  { p:0.07, zen:[ 26, 34, 74], mid:[ 56, 52, 96], hor:[120, 78, 96], glow:[200,120,110], ga:0.30 }, // 黎明 靛蓝泛紫
+  { p:0.12, zen:[ 38, 74,150], mid:[ 96,104,168], hor:[226,132,104], glow:[255,168,120], ga:0.78 }, // 日出 地平红橙
+  { p:0.20, zen:[ 42,104,190], mid:[ 92,150,214], hor:[214,166,150], glow:[255,214,170], ga:0.55 }, // 清晨 蓝 + 地平仍泛红
+  { p:0.34, zen:[ 46,112,196], mid:[ 86,152,218], hor:[160,196,232], glow:[255,246,214], ga:0.26 }, // 上午 转清蓝
+  { p:0.50, zen:[ 40,106,198], mid:[ 80,150,222], hor:[150,192,236], glow:[255,250,232], ga:0.22 }, // 正午
+  { p:0.68, zen:[ 44,110,194], mid:[ 96,150,210], hor:[190,190,206], glow:[255,236,196], ga:0.32 }, // 午后
+  { p:0.80, zen:[ 52, 92,168], mid:[140,120,166], hor:[236,146, 96], glow:[255,170,110], ga:0.82 }, // 夕照 地平橙红
+  { p:0.88, zen:[ 34, 44,104], mid:[ 86, 60,118], hor:[176, 86, 86], glow:[220,110, 96], ga:0.45 }, // 落日余晖
+  { p:0.94, zen:[ 14, 18, 46], mid:[ 22, 26, 58], hor:[ 34, 38, 72], glow:[ 60, 70,110], ga:0.10 }, // 暮色
+  { p:1.00, zen:[ 10, 14, 34], mid:[ 16, 22, 48], hor:[ 26, 32, 62], glow:[ 40, 50, 90], ga:0.00 }, // 夜(闭环)
+];
+function skyPalette(kind, phase){
+  const p = ((phase % 1) + 1) % 1;
+  let i = 0; while(i < SKY_KEYS.length-2 && SKY_KEYS[i+1].p <= p) i++;
+  const a = SKY_KEYS[i], b = SKY_KEYS[i+1];
+  const t = (p - a.p) / Math.max(1e-6, b.p - a.p);
+  const mix3 = (x,y)=>[0,1,2].map(k=>Math.round(x[k] + (y[k]-x[k])*t));
+  const W = WX_SKY[kind] || WX_SKY.clear;
+  // 阴/雨/雪：把时间色往该天气的灰色拉，保留昼夜明暗但吃掉彩度
+  const toGrey = c => W.grey<=0 ? c : c.map((v,k)=>Math.round(v + (W.greyRGB[k]*(v/255*0.6+0.4) - v) * W.grey));
+  return {
+    zen: toGrey(mix3(a.zen, b.zen)),
+    mid: toGrey(mix3(a.mid, b.mid)),
+    hor: toGrey(mix3(a.hor, b.hor)),
+    glow: mix3(a.glow, b.glow),
+    ga: (a.ga + (b.ga - a.ga) * t) * (1 - W.grey * 0.85),   // 阴雨看不到日晕
+  };
+}
+
+// ── 共用画布 / 贴图：重绘就地覆盖，不新建纹理 ─────────────────────────────────
+const skyCv = document.createElement('canvas'); skyCv.width = SKY_W; skyCv.height = SKY_H;
+const skyCtx = skyCv.getContext('2d');
+const skyTex = new THREE.CanvasTexture(skyCv);
+skyTex.colorSpace = THREE.SRGBColorSpace;
+skyTex.mapping = THREE.EquirectangularReflectionMapping;
+let _skyDrawnKind = null, _skyDrawnPhase = -999, _skyDrawnSunU = -999;
+
+// 太阳在全景图上的横向位置：把光源方向换成 equirect 的 u 坐标。
+// three.js 的 equirectUv: u = atan2(d.z, d.x)/2π + 0.5，v = asin(d.y)/π + 0.5（v=1 朝上）。
+const _skySunDir = new THREE.Vector3();
+function sunEquirectUV(){
+  // 注意：本块的初始化(scene.background = envTexFor(...))跑在 mainLight 创建**之前**，
+  // 那时 `mainLight` 还在暂时性死区里，连 typeof 都会抛。用 try 兜住，首帧先按"日晕在正中"画，
+  // 等渲染循环第一次调用 updateSky() 时就会用真实太阳方向重画。
+  try {
+    _skySunDir.copy(mainLight.position).sub(mainLight.target.position).normalize();
+  } catch(e) {
+    return { u: 0.5, v: 0.62 };
+  }
+  return { u: Math.atan2(_skySunDir.z, _skySunDir.x) / (Math.PI*2) + 0.5,
+           v: Math.asin(Math.max(-1, Math.min(1, _skySunDir.y))) / Math.PI + 0.5 };
+}
+
+function redrawSky(kind, phase){
+  const P = skyPalette(kind, phase);
+  const hV = Math.round(SKY_H * 0.5);
+  const rgb = c => 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+  // 上半：天顶 → 中段 → 地平
+  const g = skyCtx.createLinearGradient(0, 0, 0, hV);
+  g.addColorStop(0, rgb(P.zen)); g.addColorStop(0.70, rgb(P.mid)); g.addColorStop(1, rgb(P.hor));
+  skyCtx.fillStyle = g; skyCtx.fillRect(0, 0, SKY_W, hV);
+  // 日晕：跟着太阳方向在全景图上左右移动、随仰角上下移动 —— 于是"泛红的那一侧"就是太阳那一侧。
+  // 半径必须随太阳高度收放：窗户正朝着太阳那一侧(-x)，若午间也用大半径，
+  // 整条能从窗口看到的天空都被日晕盖成惨白，蓝天就没了（实测窗口平均色被冲到 [212,190,185]）。
+  // 真实大气也是这样：正午日晕很紧，只有低角度阳光穿过厚大气时才大范围散射泛红。
+  if(P.ga > 0.01){
+    const uv = sunEquirectUV();
+    const sx = uv.u * SKY_W, sy = (1 - uv.v) * SKY_H;
+    const lowSun = 1 - Math.max(0, Math.min(1, (uv.v - 0.5) * 2));   // 1=贴地平，0=正上方
+    const R = SKY_H * (0.13 + 0.42 * lowSun * lowSun);
+    const rg = skyCtx.createRadialGradient(sx, sy, 0, sx, sy, R);
+    const gc = P.glow;
+    rg.addColorStop(0,    'rgba('+gc[0]+','+gc[1]+','+gc[2]+','+(0.92*P.ga).toFixed(3)+')');
+    rg.addColorStop(0.22, 'rgba('+gc[0]+','+gc[1]+','+gc[2]+','+(0.40*P.ga).toFixed(3)+')');
+    rg.addColorStop(1,    'rgba('+gc[0]+','+gc[1]+','+gc[2]+',0)');
+    skyCtx.fillStyle = rg;
+    skyCtx.fillRect(0, 0, SKY_W, hV);
+    // 全景图左右是接缝：太阳靠边时把日晕在另一侧补画一次，接缝处不会突然切断
+    if(sx < R)          { const r2=skyCtx.createRadialGradient(sx+SKY_W,sy,0,sx+SKY_W,sy,R); r2.addColorStop(0,'rgba('+gc[0]+','+gc[1]+','+gc[2]+','+(0.92*P.ga).toFixed(3)+')'); r2.addColorStop(0.22,'rgba('+gc[0]+','+gc[1]+','+gc[2]+','+(0.40*P.ga).toFixed(3)+')'); r2.addColorStop(1,'rgba('+gc[0]+','+gc[1]+','+gc[2]+',0)'); skyCtx.fillStyle=r2; skyCtx.fillRect(0,0,SKY_W,hV); }
+    else if(sx > SKY_W-R){ const r2=skyCtx.createRadialGradient(sx-SKY_W,sy,0,sx-SKY_W,sy,R); r2.addColorStop(0,'rgba('+gc[0]+','+gc[1]+','+gc[2]+','+(0.92*P.ga).toFixed(3)+')'); r2.addColorStop(0.22,'rgba('+gc[0]+','+gc[1]+','+gc[2]+','+(0.40*P.ga).toFixed(3)+')'); r2.addColorStop(1,'rgba('+gc[0]+','+gc[1]+','+gc[2]+',0)'); skyCtx.fillStyle=r2; skyCtx.fillRect(0,0,SKY_W,hV); }
+  }
+  // 云：缓存的灰度云层直接叠上去，再用 multiply 让它吃到当时的天空色（夜里云自然变暗发蓝）
+  const cl = cloudLayerFor(kind);
+  skyCtx.save();
+  skyCtx.globalAlpha = 0.92;
+  skyCtx.imageSmoothingEnabled = true;
+  skyCtx.drawImage(cl, 0, 0, cl.width, cl.height, 0, 0, SKY_W, hV);
+  skyCtx.globalCompositeOperation = 'multiply';
+  const cg = skyCtx.createLinearGradient(0, 0, 0, hV);
+  cg.addColorStop(0, rgb(P.mid)); cg.addColorStop(1, rgb(P.hor));
+  skyCtx.fillStyle = cg; skyCtx.fillRect(0, 0, SKY_W, hV);
+  skyCtx.restore();
+  // 下半（地平线以下）：不画地面，继续用天空色做柔和 haze —— 从窗口向下看仍是天空，
+  // 不会出现一条灰绿地面带把窗口染浊（这是用户此前明确要过的"窗外就是蓝天的颜色"）。
+  const low = [0,1,2].map(k => Math.round(P.mid[k] + (P.zen[k]-P.mid[k]) * 0.55));
+  const gg = skyCtx.createLinearGradient(0, hV, 0, SKY_H);
+  gg.addColorStop(0, rgb(P.hor)); gg.addColorStop(0.35, rgb(P.mid)); gg.addColorStop(1, rgb(low));
+  skyCtx.fillStyle = gg; skyCtx.fillRect(0, hV, SKY_W, SKY_H - hV);
+
+  // ══ 关键：equirect 背景必须 dispose() 才会真的更新 ═══════════════════════════════
+  // three.js 不会直接用 EquirectangularReflectionMapping 的贴图当背景 —— WebGLBackground
+  // 先把它**转成一张 CubeUV 贴图并缓存住**（cubemaps.get(texture)），缓存键就是这张 texture，
+  // 只有 texture 的 'dispose' 事件会让它失效。
+  // 于是只置 needsUpdate 是没用的：画布内容换了、texture.version 涨了，
+  // 屏幕上的天空却永远停在**第一次转换时**的样子。
+  // 实测：只 needsUpdate → 窗口恒为 [211,194,194]（初始化那帧的清晨暖色，当时 mainLight 还在 TDZ、
+  // 日晕画在正中）；加上 dispose() → 立刻变成画布真实的 [180,207,227] 蓝。
+  // 重转一次实测 0.84ms，而重绘本身已按相位节流（约 1.5 秒一次），完全可以承受。
+  skyTex.dispose();
+  skyTex.needsUpdate = true;
+  _skyDrawnKind = kind; _skyDrawnPhase = phase;
+}
+
+// 当前"天空时刻"：开着时间轴时跟 driftT 走；静态预设各自对应一个时刻。
+let skyPhase = 0.20;                       // 默认=清晨
+const PRESET_SKY_PHASE = { morning:0.20, noon:0.50, dusk:0.80, night:0.96, custom:0.34 };
+// 重绘门槛：相位变化超过这个量才重画。一天 600 秒 → 0.0025 约合 1.5 秒一次；
+// 4× 速度下约 0.4 秒一次。再密集也看不出差别，只是白白多几次纹理上传。
+const SKY_REDRAW_EPS = 0.0025;
+function updateSky(phase){
+  if(phase !== undefined) skyPhase = ((phase % 1) + 1) % 1;
+  if(!skyBlue) return;                      // 纯黑背景模式：不用画
+  const uv = sunEquirectUV();
+  if(currentWeather === _skyDrawnKind &&
+     Math.abs(skyPhase - _skyDrawnPhase) < SKY_REDRAW_EPS &&
+     Math.abs(uv.u - _skyDrawnSunU) < 0.004) return;
+  _skyDrawnSunU = uv.u;
+  redrawSky(currentWeather, skyPhase);
+}
+const envTexFor = k => { if(k !== _skyDrawnKind) redrawSky(k, skyPhase); return skyTex; };
 // 窗外天空亮度总系数：过低会把蓝天压成灰蓝(看着像脏玻璃)，过高会被 bloom 冲白。
 // 0.85 ≈ 白天窗口是清亮的蓝天，同时留住云的层次。改这一个值即可整体调窗外明暗。
 const SKY_BG_MUL = 0.85;
@@ -8621,7 +8802,8 @@ syncCorridor();
 function setWeather(kind){
   if(!['clear','cloudy','rain','snow'].includes(kind)) return;
   currentWeather = kind;
-  applySkyBg();                          // equirect 环境图（懒加载）/ 或纯黑，取决于 skyBlue
+  applySkyBg();                          // equirect 全景 / 或纯黑，取决于 skyBlue
+  redrawSky(kind, skyPhase);             // 换天气立刻按"当前时刻"重画天空（云形状换了，颜色也要跟着当时的时间）
   const L=WX_LIGHT[kind]; wxSun=L.sun; wxFillMul=L.fill; wxSunGrey=L.sunGrey; wxHemiGrey=L.hemiGrey;
   renderer.toneMappingExposure = 1.5 * L.exp;   // 阴雨压暗曝光
   setPrecip(kind);                              // 雨/雪下落粒子
@@ -8635,6 +8817,7 @@ function applySkyBg(){
 }
 function setSkyBlue(on){
   skyBlue = !!on;
+  if(skyBlue) redrawSky(currentWeather, skyPhase);   // 纯黑期间 updateSky 会直接 return，切回来要补画一次
   applySkyBg();
   document.querySelectorAll('.sky-btn').forEach(b => b.classList.toggle('on', (b.dataset.sky==='1')===skyBlue));
 }
@@ -8699,6 +8882,8 @@ function applyPreset(k){
     ));
     scene.backgroundIntensity = extB * SKY_BG_MUL;   // 窗外天空随昼夜明暗（×SKY_BG_MUL 总系数，见其定义）
   }
+  // 静态预设也各自对应一个"时刻"，窗外天空跟着换色（清晨蓝+地平泛红 / 正午清蓝 / 傍晚橙红 / 深夜藏蓝）
+  updateSky(PRESET_SKY_PHASE[k] !== undefined ? PRESET_SKY_PHASE[k] : skyPhase);
   // Hemisphere bounce: strong at noon, off at night
   hemiTarget = k==='noon' ? 0.55 : k==='morning' ? 0.10 : k==='dusk' ? 0.18 : 0.0; // Task6: 物理灯+提亮，天光间接补光上调(noon→0.55 软化吊顶/上半墙/桌底，明亮通透)；清晨仍较低(→0.10)保丁达尔光柱；夜=0(再乘 envGate 双重门控)
   // 静态模式也压低基础环境光，夜间最暗；晨昏天光偏暖、正午偏冷蓝。
@@ -8903,6 +9088,10 @@ function layoutViewport(){
   // 叠层画布(bloom/grain)：drawing buffer + CSS 尺寸/偏移都跟随画幅矩形，三层严格对齐
   if(typeof resizeBloom==='function') resizeBloom();
   if(typeof resizeGrain==='function') resizeGrain();
+  // 画幅变了 → 监控墙格子重排。这里读 DOM 上的 .on 而不是读 monitorOn：
+  // layoutViewport() 在初始化阶段就会被调用，那时 `let monitorOn` 还在暂时性死区里，
+  // 连 typeof 都会抛 ReferenceError（typeof 只对未声明的标识符安全）。
+  if(document.getElementById('monitorGrid')?.classList.contains('on')){ rebuildMonitorDOM(); monitorRepaintAll(); }
   for(const cv of [bloomCv, grainCv]){
     cv.style.left=left+'px'; cv.style.top=top+'px';
     cv.style.width=w+'px';   cv.style.height=h+'px';
@@ -9149,7 +9338,9 @@ if(driftOn){
     Math.min(1, extB * (1 - warmK*0.35))
   ));
   scene.backgroundIntensity = extB * SKY_BG_MUL;   // 窗外天空随昼夜明暗（×SKY_BG_MUL 总系数，见其定义）
-  
+  updateSky(dayPhase);   // 窗外天空**颜色**随时刻流动：黎明靛蓝泛紫 → 日出地平红橙 → 上午清蓝 → 夕照橙红 → 入夜深蓝
+                         // （内部按相位/太阳方位节流，不是每帧重画；见 SKY_REDRAW_EPS）
+
     // ── Simulated clock time ──────────────────────────────────────────────────
     // Map dayPhase 0→1 to 05:30→22:30 (17 小时窗口，覆盖到晚自习)
     const totalMinutes = 5*60+30 + dayPhase * 17*60; // 5:30 → 22:30
@@ -9375,8 +9566,12 @@ if(driftOn){
 
   applyWeatherLighting();  // 天气→弱化直射/冷灰化（须在 sync 之后、渲染之前）
   updatePrecip();          // 雨/雪下落
-  composer.render();
-  drawBloom(); // 亮部辉光叠层（每帧，避免相机移动时拖影）
+  if(typeof monitorOn !== 'undefined' && monitorOn){
+    renderMonitorWall();   // 监控墙：每个机位画进自己的小格（不走 composer，省掉每格一遍后处理）
+  } else {
+    composer.render();
+    drawBloom(); // 亮部辉光叠层（每帧，避免相机移动时拖影）
+  }
 
   // ── Dust particle animation ────────────────────────────────────────────────
   const dustTime = performance.now() * 0.0004;
@@ -9485,6 +9680,7 @@ document.addEventListener('keydown', e=>{
   if(e.key==='Tab'){e.preventDefault();togglePanel();}
   if(e.key==='t'||e.key==='T'){ toggleDrift(); }                  // T 开关时间轴（日光推移）
   if(e.key==='f'||e.key==='F'){ toggleFullscreen(); }             // F 浏览器全屏
+  if(e.key==='m'||e.key==='M'){ toggleMonitor(); }                // M 监控墙（所有机位平铺）
   if(e.key==='Escape' && settingsOpen){ toggleSettings(false); }  // Esc 关闭设置浮层
   if(e.key==='1') applyPreset('morning');
   if(e.key==='2') applyPreset('noon');
@@ -9501,6 +9697,133 @@ const CAM_VIEWS = {
   '9': { name:'侧窗全景',    fov:70, theta:2.20,    phi:0.14, camR: 8.5, panX:-2.0, panZ: 4.0, panY: 0.30 },
   '0': { name:'教室外观',    fov:55, theta:-0.60,   phi:0.35, camR:26.0, panX: 0.0, panZ: 3.0, panY: 0.80 }, // 教室单体外观俯瞰
 };
+// ══ 监控墙：把所有机位的实时画面同时平铺出来 ═══════════════════════════════════════
+// 原理：同一个 renderer、同一个 scene，用 setViewport + setScissor 把每个机位画进
+// canvas 上对应的小格。阴影贴图是世界空间的且 autoUpdate=false，所以多机位只多付
+// 几何/片元的钱，不会重算阴影。
+// 小窗走 renderer.render() 直出(不过 composer)：省掉每格一遍 GTAO/后处理，
+// 而色调映射与 sRGB 输出本来就配在 renderer 上，观感与主画面基本一致。
+const MONITOR_KEYS = ['5','6','7','9','0'];      // 五个固定机位 + 末尾追加"当前视角"
+// monitorOn 的声明已上移到渲染器初始化处 —— animate 循环与 layoutViewport 都在本段之前就会跑到，
+// 声明留在这里的话它们读到的是暂时性死区（typeof 也救不了，会直接抛 ReferenceError）。
+const monitorCam = new THREE.PerspectiveCamera(60, 1, 0.3, 80);
+const monitorGridEl = document.getElementById('monitorGrid');
+let _monCells = [];
+
+// 把一个机位定义换算成相机位姿（与 updateCam 同一套公式，但写进任意相机、不碰全局）
+function applyViewToCamera(v, cam){
+  cam.position.set(
+    v.panX + v.camR*Math.sin(v.theta)*Math.cos(v.phi),
+    v.camR*Math.sin(v.phi) + 1.5 + v.panY,
+    v.panZ + v.camR*Math.cos(v.theta)*Math.cos(v.phi)
+  );
+  cam.lookAt(v.panX, 1.2 + v.panY, v.panZ);
+}
+// 当前监控墙要显示的格子：五个固定机位 + 一个"你现在正在看的视角"
+function monitorTiles(){
+  const t = MONITOR_KEYS.filter(k=>CAM_VIEWS[k]).map(k => ({ key:k, name:CAM_VIEWS[k].name, view:CAM_VIEWS[k] }));
+  t.push({ key:'live', name:'当前视角', live:true });
+  return t;
+}
+// 网格布局：尽量接近正方形，最后一行不足就靠左排
+function monitorLayout(n, rect){
+  const cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n/cols);
+  const gap = 4;
+  const cw = (rect.w - gap*(cols-1)) / cols, ch = (rect.h - gap*(rows-1)) / rows;
+  return Array.from({length:n}, (_,i)=>{
+    const c = i % cols, r = Math.floor(i/cols);
+    return { x: Math.round(rect.left + c*(cw+gap)), y: Math.round(rect.top + r*(ch+gap)),
+             w: Math.round(cw), h: Math.round(ch) };
+  });
+}
+// 重建 DOM 层（边框/标签/点击热区）。只在开启或画幅变化时调用。
+function rebuildMonitorDOM(){
+  if(!monitorGridEl) return;
+  const rect = frameRect();
+  const tiles = monitorTiles();
+  const cells = monitorLayout(tiles.length, rect);
+  monitorGridEl.style.left='0'; monitorGridEl.style.top='0';
+  monitorGridEl.style.width='100%'; monitorGridEl.style.height='100%';
+  monitorGridEl.innerHTML = '';
+  _monCells = [];
+  tiles.forEach((t,i)=>{
+    const c = cells[i];
+    const el = document.createElement('button');
+    el.type='button'; el.className = 'mon-cell' + (t.live?' live':'');
+    el.style.left=c.x+'px'; el.style.top=c.y+'px'; el.style.width=c.w+'px'; el.style.height=c.h+'px';
+    el.title = t.live ? '当前自由视角' : ('切到「'+t.name+'」机位');
+    el.innerHTML = '<span class="tag">'+(i+1)+' · '+t.name+'</span><span class="rec"></span>';
+    el.addEventListener('click', ()=>{
+      if(!t.live) applyView(t.view);      // 点哪一格就跳到哪个机位
+      toggleMonitor(false);               // 并退出监控墙，回到单画面
+    });
+    monitorGridEl.appendChild(el);
+    _monCells.push({ tile:t, rect:c });
+  });
+}
+// 轮巡指针：固定机位每帧只重画一个（见 renderMonitorWall 里的说明）
+let _monRR = 0;
+// 每帧：把机位画进自己的小格
+function renderMonitorWall(){
+  const rect = frameRect();
+  // 注意：setViewport/setScissor 传的是 **CSS 像素**，three.js 内部会自己乘 _pixelRatio
+  // （WebGLRenderer.setViewport → state.viewport(_viewport.multiplyScalar(_pixelRatio))）。
+  // 这里再乘一次 dpr 会把视口撑到画布外，每格只剩被放大的一条 —— 表现就是整面监控墙一片空白。
+  renderer.setRenderTarget(null);
+  renderer.setScissorTest(true);
+  const oldAutoClear = renderer.autoClear;
+  renderer.autoClear = true;    // 每格自己清一次（有 scissor 限制，只清本格）
+  // canvas 的坐标原点在左下角，而 frameRect/DOM 用的是左上角 → y 要翻过来
+  const H = rect.h;
+  // ── 为什么不是每帧重画全部六格 ──────────────────────────────────────────────
+  // 六格全画实测 38.2ms/帧(26 FPS)，瓶颈是 draw call：5237 次 vs 单画面 1954 次
+  // （同一套几何要按六个相机各提交一遍，而片元反倒便宜——每格只有 1/6 的像素）。
+  // 但五个固定机位是**不动的**：画面只随光照/天气/时间变，而这些都是慢变量。
+  // 所以按真实监控墙的做法轮巡刷新：
+  //   · "当前视角"那一格每帧都画 —— 它跟着你的鼠标动，必须跟手；
+  //   · 五个固定机位每帧只轮到一个 —— 每格约 5 帧(~80ms)刷新一次，看光照变化完全够。
+  // canvas 建了 preserveDrawingBuffer:true(截图功能需要)，没被重画的格子会原样留在画布上，
+  // 所以不会闪。每帧的 draw call 因此降到约两格的量。
+  const due = _monCells.filter(c => c.tile.live);
+  const fixed = _monCells.filter(c => !c.tile.live);
+  if(fixed.length){ due.push(fixed[_monRR % fixed.length]); _monRR++; }
+  for(const {tile, rect:c} of due){
+    const x = (c.x - rect.left), yTop = (c.y - rect.top);
+    const y = H - yTop - c.h;
+    if(tile.live){
+      monitorCam.position.copy(camera.position);
+      monitorCam.quaternion.copy(camera.quaternion);
+      monitorCam.fov = camera.fov;
+    } else {
+      applyViewToCamera(tile.view, monitorCam);
+      monitorCam.fov = tile.view.fov || 60;
+    }
+    monitorCam.aspect = c.w / Math.max(1, c.h);
+    monitorCam.layers.mask = camera.layers.mask;   // 跟主相机同一套灯光层，避免触发着色器重编
+    monitorCam.updateProjectionMatrix();
+    renderer.setViewport(x, y, c.w, c.h);
+    renderer.setScissor (x, y, c.w, c.h);
+    renderer.render(scene, monitorCam);
+  }
+  renderer.autoClear = oldAutoClear;
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, rect.w, rect.h);
+}
+// 一次把六格全部画一遍：开启监控墙、或画幅变化导致格子重排时用，避免出现空格
+function monitorRepaintAll(){
+  if(!monitorOn) return;
+  for(let i=0;i<_monCells.length;i++) renderMonitorWall();
+}
+function toggleMonitor(force){
+  monitorOn = (force===undefined) ? !monitorOn : !!force;
+  document.getElementById('monitorBtn')?.classList.toggle('on', monitorOn);
+  monitorGridEl?.classList.toggle('on', monitorOn);
+  // 叠层(辉光/暗角)只属于单画面，监控墙下隐藏，免得一层暗角压在九宫格上
+  for(const cv of [bloomCv, grainCv]) if(cv) cv.style.display = monitorOn ? 'none' : '';
+  if(monitorOn){ rebuildMonitorDOM(); renderer.clear(); monitorRepaintAll(); }
+  else { renderer.setScissorTest(false); const r=frameRect(); renderer.setViewport(0,0,r.w,r.h); }
+}
+
 const camLabel = document.createElement('div');
 camLabel.style.cssText = 'position:fixed;left:50%;top:64px;transform:translateX(-50%);padding:6px 14px;background:rgba(0,0,0,0.55);color:#fff;font:14px/1.4 system-ui,sans-serif;letter-spacing:1px;border-radius:6px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:60;';
 document.body.appendChild(camLabel);

@@ -286,6 +286,47 @@ input[type=range]:focus-visible,
   background:rgba(212,168,75,.22); border-color:var(--amber-line); color:var(--amber);
 }
 
+/* ── 快捷键清单（设置浮层里的机位一栏） ── */
+.key-list{ display:flex; flex-direction:column; gap:5px; }
+.key-row{ display:flex; align-items:center; gap:9px; font-size:11px; color:var(--t2); }
+kbd{
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:19px; height:19px; padding:0 5px;
+  font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:10px; line-height:1;
+  color:var(--amber-soft); background:var(--amber-tint);
+  border:1px solid var(--amber-line); border-radius:4px;
+}
+
+/* ── 画面／面板 之间的可拖拽分隔条 ── */
+/* 把它当成 Safari 窗口的下边框：往上拖 → 画面变矮变宽(视野更广、更"广角")，
+   往下拖 → 画面变高(视野更窄、更"长焦")。双击复位。
+   这和在浏览器里拖窗口下边框是同一条代码路径(layoutViewport → camera.aspect = w/h)，
+   所以观感完全一致。 */
+#viewSplitter{
+  position:fixed; left:0; right:0; z-index:11;
+  height:14px; cursor:ns-resize; touch-action:none;
+  display:flex; align-items:center; justify-content:center;
+  background:transparent;
+}
+#viewSplitter::before{
+  content:''; width:74px; height:3px; border-radius:2px;
+  background:rgba(255,255,255,.14);
+  transition:background var(--dur) var(--ease), width var(--dur) var(--ease);
+}
+#viewSplitter:hover::before{ background:var(--amber-line); width:104px; }
+#viewSplitter.dragging::before{ background:var(--amber); width:132px; }
+#viewSplitter.dragging{ cursor:grabbing; }
+/* 拖动时给个数值提示，像编辑器拖分栏那样 */
+#viewSplitterTip{
+  position:fixed; z-index:12; pointer-events:none; opacity:0;
+  transform:translate(-50%,-140%);
+  font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:10px; letter-spacing:.1em;
+  color:var(--t1); background:rgba(8,8,12,.86); backdrop-filter:var(--blur);
+  border:1px solid var(--line-hi); border-radius:5px; padding:4px 9px; white-space:nowrap;
+  transition:opacity .15s var(--ease);
+}
+#viewSplitterTip.on{ opacity:1; }
+
 /* ── 监控墙：把各机位的实时画面平铺成一面监控屏 ── */
 /* WebGL 那一侧用 scissor 把每个机位画进对应的小窗；这一层 DOM 只负责边框、标签和点击，
    这样标签是真正的文字(不受画布分辨率影响)，点哪一格就跳到哪个机位。 */
@@ -295,7 +336,7 @@ input[type=range]:focus-visible,
 }
 #monitorGrid.on{ display:block; }
 .mon-cell{
-  position:absolute; pointer-events:auto; cursor:pointer;
+  position:absolute; pointer-events:auto; cursor:pointer; border-radius:5px;
   /* 必须显式透明：这是个 <button>，浏览器默认给它一块浅色底 —— 不清掉就会整片盖住下面的 WebGL 画面
      （表现为六个格子全是白的，而画布里其实已经画好了）。padding/font 也一并清掉。 */
   background:transparent; padding:0; font:inherit; color:inherit; -webkit-appearance:none; appearance:none;
@@ -500,6 +541,8 @@ button.cv-go:focus-visible{ outline:2px solid var(--amber-soft); outline-offset:
 
 <!-- 收起/展开手柄：必须是 #panel 的兄弟节点(不能放进 #panel 内)——#panel 收起时用 transform:translateY(100%)，
      transform 会成为其内 position:fixed 子元素的包含块，若手柄在里面会随面板一起滑出屏幕外 → 收起后无法再点开。 -->
+<div id="viewSplitter" title="上下拖动画面下沿：「铺满」比例下越矮越广角；锁死比例时只改画面大小。双击复位"></div>
+<div id="viewSplitterTip"></div>
 <button id="panelToggle" onclick="togglePanel()">▼ 收起面板</button>
 <!-- 底部主面板：三盏光并排 —— 太阳(窗光) / 天花板灯 / 走廊灯。
      天花板灯与走廊灯原本收在 ⚙ 设置浮层里，要调"开灯 vs 太阳"的配比得先开浮层、
@@ -552,30 +595,24 @@ button.cv-go:focus-visible{ outline:2px solid var(--amber-soft); outline-offset:
       <div class="q-cap" style="margin-top:9px">画面大小 · 拖到 100% 即顶满</div>
       <div class="row"><label>大小</label><input type="range" class="g" id="frameFill" min="0.55" max="1" value="0.94" step="0.01" data-nosync><span class="val" id="frameFillv">94%</span></div>
       <div class="q-cap" style="opacity:.62">F 键 = 浏览器全屏 · Tab 收起面板可再大一圈</div>
+      <div class="q-cap" style="margin-top:7px;opacity:.62">画面下沿那条横杠可上下拖：选「铺满」时拖动＝改变取景宽窄（越矮越广角），锁死比例时＝只改大小。双击复位。</div>
     </div>
-    <!-- 机位 View：一键切到各区域 -->
+    <!-- 机位 View：只列快捷键，不再放按钮（按数字键直接切，比开浮层点按钮快） -->
     <div class="pcol">
       <div class="ptitle">🎥 机位 · View</div>
-      <div class="aspect-row" style="flex-wrap:wrap;gap:5px">
-        <button class="aspect-btn" onclick="applyView(CAM_VIEWS['0'])">教室外观</button>
-        <button class="aspect-btn" onclick="applyView(CAM_VIEWS['5'])">教室</button>
+      <div class="key-list">
+        <div class="key-row"><kbd>5</kbd><span>全景概览</span></div>
+        <div class="key-row"><kbd>6</kbd><span>教师视角</span></div>
+        <div class="key-row"><kbd>7</kbd><span>后→前 广角</span></div>
+        <div class="key-row"><kbd>9</kbd><span>侧窗全景</span></div>
+        <div class="key-row"><kbd>0</kbd><span>教室外观</span></div>
       </div>
+      <div class="q-cap" style="margin-top:9px;opacity:.62">数字键直接切 · <kbd>M</kbd> 监控墙可同时看全部</div>
     </div>
-    <!-- 性能 Performance：只剩清晰度档位。
-         「动态分辨率·转动时降」开关已删除：它靠转动视角时临时降分辨率来换帧率，
-         代价是拖动鼠标时整个画面(以及桌椅/窗框边缘)糊一下再变清晰 —— 属于用模糊补帧，
-         本项目明确不采用。帧率改由真正减少每帧计算量来解决(见顶部 makeSpotLightsDiffuseOnly 等)，
-         任何时刻都是同一个分辨率，转动中画面不变糊。 -->
-    <div class="pcol">
-      <div class="ptitle">⚡ 性能 · Performance</div>
-      <div class="q-cap">清晰度（越高越清晰、越吃帧）</div>
-      <div class="aspect-row">
-        <button class="aspect-btn q-btn" data-q="1.0" onclick="setQuality('1.0')">省电 1.0</button>
-        <button class="aspect-btn q-btn" data-q="1.3" onclick="setQuality('1.3')">均衡 1.3</button>
-        <button class="aspect-btn q-btn on" data-q="1.75" onclick="setQuality('1.75')">高清 1.75</button>
-      </div>
-      <div class="q-cap" style="margin-top:9px;opacity:.62">全程恒定分辨率 · 转动不降画质</div>
-    </div>
+    <!-- 清晰度档位已删除：固定跑最高清晰度(见 resStill)。
+         「动态分辨率·转动时降」也早已删除 —— 它靠转动视角时临时降分辨率换帧率，
+         代价是拖动鼠标时画面糊一下再变清晰，属于用模糊补帧，本项目不采用。
+         帧率由真正减少每帧计算量解决(见顶部 makeSpotLightsDiffuseOnly / LAYER_CORRIDOR)。 -->
     <!-- 天花板灯 / 走廊灯 已移到底部主面板，与窗光(太阳)并排，方便对照着调 -->
     <!-- Weather · 窗外天气 -->
     <div class="pcol">
@@ -4937,6 +4974,11 @@ let monitorOn = false;
 // 时间轴条的净高(含上下留白)：打开时从可用区里扣掉这一条，画幅相应上移变小，
 // 时间轴就永远压不到画面上；关掉时画幅自动长回去。
 const TIMELINE_STRIP = 64;
+// 拖动面板上沿抬高的像素数。0 = 面板贴着画面下沿(默认)；越大画面越矮、视野越广。
+// 声明必须在 viewSize() 之前 —— viewSize 在渲染器初始化阶段就会被调用，
+// 而 let/const 在声明前是暂时性死区，typeof 也挡不住（本文件已因此踩过三次）。
+let panelLift = 0;
+const MIN_VIEW_H = 120;   // 画面最矮保留这么多，免得被拖没
 function viewSize(){
   const p = document.getElementById('panel');
   const ph = (panelOpen && p) ? p.offsetHeight : 0;   // offsetHeight 不受 translateY 收起动画影响
@@ -4945,7 +4987,11 @@ function viewSize(){
   // 未声明的标识符安全，对 TDZ 中的 let/const 一样抛）。元素不存在时 ?. 返回 undefined → 不占位。
   const tlEl = document.getElementById('timeline');
   const th = (tlEl && !tlEl.classList.contains('hidden')) ? TIMELINE_STRIP : 0;
-  return { w: innerWidth, h: Math.max(1, innerHeight - ph - th) };
+  // panelLift：拖动面板上沿"抬高"出来的额外高度（见 #viewSplitter）。
+  // 画面可用高度变矮 → 在「铺满」比例下相机 aspect 变大 → 水平视野变广，
+  // 效果与在 Safari 里把窗口下边框往上拖完全一致（走的就是同一条 layoutViewport 路径）。
+  const full = Math.max(1, innerHeight - ph - th);          // 面板/时间轴之上的全部空间
+  return { w: innerWidth, h: Math.max(MIN_VIEW_H, full - panelLift), full };
 }
 // 画幅：把渲染矩形约束成所选比例(16:9 默认 / 2.35 / 21:9 / 4:3)，在可用区内居中，
 // 四周露出的黑色 body 即上下(letterbox)或左右(pillarbox)黑边。
@@ -4969,13 +5015,16 @@ function frameRect(){
   else if (aw / ah > ar){ h = ah; w = Math.round(h * ar); }  // 可用区更宽→左右留更多
   else { w = aw; h = Math.round(w / ar); }                   // 可用区更高→上下留更多
   const left = Math.round((av.w - w) / 2);
-  const top  = Math.round((av.h - h) / 2);   // 仅在面板上方的可用区内垂直居中
+  // 垂直居中用 av.full（面板之上的**全部**空间）而不是 av.h：
+  // 拖分隔条抬高画面时，让省下来的高度平均分到画面上下两侧，读作"上下黑边"(letterbox)，
+  // 而不是在画面和面板之间空出一大块死黑。这也和整套画框美学一致。
+  const top  = Math.round(((av.full || av.h) - h) / 2);
   return { w, h, left, top };
 }
 { const r=frameRect(); renderer.setSize(r.w, r.h); }
 // ── 渲染清晰度状态（⚙设置面板控制；curRes = 当前实际渲染倍率）──
 // 恒定不变：不存在"转动时降分辨率"的动态档位(那是用模糊补帧)，只有用户手选的三档。
-let resStill = 1.75;         // 清晰度档位：省电1.0 / 均衡1.3 / 高清1.75，默认高清
+let resStill = 1.75;         // 渲染倍率：固定最高清晰度（档位选择器已删除，不再降画质换帧率）
 let curRes = resStill;       // 当前实际渲染倍率
 let _appliedRes = -1;        // 上次真正 setSize 采用的倍率
 // canvas(renderer)固定在此分辨率——切档位只改 composer 离屏，canvas 显存不重建=不闪。
@@ -9077,6 +9126,12 @@ function layoutViewport(){
     const rs = document.documentElement.style;
     rs.setProperty('--panel-h', ph + 'px');
     rs.setProperty('--hint-bottom', Math.max(ph + 16, innerHeight - (top + h) + 14) + 'px');
+    // 分隔条贴在**画面下沿**——那正是你要抓的"窗口下边框"。夹在面板上沿之内，免得跑到面板下面去。
+    const sp = document.getElementById('viewSplitter');
+    if(sp){
+      const maxTop = innerHeight - ph - 14;
+      sp.style.top = Math.min(maxTop, top + h + 2) + 'px';
+    }
   }
   camera.aspect=w/h;camera.updateProjectionMatrix();
   renderer.setPixelRatio(CANVAS_PR); // canvas 固定高分辨率(不随清晰度/动态变→不闪)
@@ -9139,10 +9194,10 @@ function applyRenderScale(){
   const s=gtaoSize(); gtaoPass.setSize(s.w,s.h); // GTAO 保持半分辨率
   _appliedRes = curRes;
 }
-// 清晰度档位：设定静止分辨率并立即应用
+// 清晰度选择器已删除（固定最高清晰度）。函数保留：URL hash 复现链接与旧报告里可能还带 q 参数，
+// 调用它不会报错，只是没有按钮可以高亮。
 function setQuality(v){
-  resStill = parseFloat(v);
-  document.querySelectorAll('.q-btn').forEach(b=>b.classList.toggle('on', b.dataset.q===v));
+  resStill = parseFloat(v) || 1.75;
   curRes = resStill; applyRenderScale();
 }
 // 抗锯齿：给 composer 两个离屏目标开/关 MSAA(4x)，dispose 触发按新 samples 重建
@@ -9618,6 +9673,75 @@ if(driftOn){
   setTimeout(hide, 12000);
 })();
 
+// ── 画面／面板 分隔条：拖动它改变画面高度 = 改变取景宽窄 ─────────────────────────
+// 相当于把操作面板当成 Safari 窗口的下边框往上/往下拖：画面变矮时相机 aspect 变大，
+// 在「铺满」比例下水平视野随之变广（three.js 的 fov 是**垂直**视场角，宽高比一变，
+// 水平视场角 = 2·atan(tan(fovY/2)·aspect) 就跟着变）——和真的去拖浏览器窗口下边框
+// 走的是同一条 layoutViewport 路径，观感一致。
+// 注：锁死比例(16:9 / 2.35 等)时，拖动只会让画面整体变小而不改变取景，
+// 想要"变广角"的效果请在 ⚙设置→画幅 里选「铺满」。
+(function initViewSplitter(){
+  const sp = document.getElementById('viewSplitter');
+  const tip = document.getElementById('viewSplitterTip');
+  if(!sp) return;
+  let dragging = false, startY = 0, startLift = 0;
+  const maxLift = ()=> {
+    const ph = (panelOpen ? (document.getElementById('panel')?.offsetHeight || 0) : 0);
+    const tl = document.getElementById('timeline');
+    const th = (tl && !tl.classList.contains('hidden')) ? TIMELINE_STRIP : 0;
+    return Math.max(0, innerHeight - ph - th - MIN_VIEW_H);
+  };
+  const showTip = (clientY)=>{
+    if(!tip) return;
+    const r = frameRect();
+    const fov = camera.fov;
+    // 水平视场角：反映"广角/长焦"的那个数，随画面宽高比变化
+    const hFov = 2 * Math.atan(Math.tan(fov*Math.PI/180/2) * (r.w / r.h)) * 180 / Math.PI;
+    tip.textContent = r.w + '×' + r.h + '　水平视野 ' + hFov.toFixed(0) + '°'
+                    + (frameAspect ? '　（比例已锁，想变广角请选「铺满」）' : '');
+    tip.style.left = '50%';
+    tip.style.top = (parseFloat(sp.style.top) || clientY) + 'px';
+    tip.classList.add('on');
+  };
+  const hideTip = ()=> tip && tip.classList.remove('on');
+  const apply = (lift)=>{
+    panelLift = Math.max(0, Math.min(maxLift(), Math.round(lift)));
+    layoutViewport();
+  };
+  sp.addEventListener('pointerdown', e=>{
+    dragging = true; startY = e.clientY; startLift = panelLift;
+    sp.setPointerCapture(e.pointerId);
+    sp.classList.add('dragging');
+    e.preventDefault();
+  });
+  sp.addEventListener('pointermove', e=>{
+    if(!dragging) return;
+    apply(startLift + (startY - e.clientY));   // 往上拖 → lift 变大 → 画面变矮变广
+    showTip(e.clientY);
+  });
+  const end = e=>{
+    if(!dragging) return;
+    dragging = false;
+    sp.classList.remove('dragging');
+    try{ sp.releasePointerCapture(e.pointerId); }catch(_){}
+    setTimeout(hideTip, 650);
+  };
+  sp.addEventListener('pointerup', end);
+  sp.addEventListener('pointercancel', end);
+  sp.addEventListener('dblclick', ()=>{ apply(0); hideTip(); });   // 双击复位
+  // 键盘可达：聚焦后上下方向键微调
+  sp.tabIndex = 0;
+  sp.setAttribute('role','separator');
+  sp.setAttribute('aria-label','拖动调整画面高度与取景宽窄');
+  sp.addEventListener('keydown', e=>{
+    const step = e.shiftKey ? 40 : 10;
+    if(e.key==='ArrowUp'){ apply(panelLift + step); e.preventDefault(); }
+    else if(e.key==='ArrowDown'){ apply(panelLift - step); e.preventDefault(); }
+    else if(e.key==='Home'){ apply(0); e.preventDefault(); }
+  });
+  addEventListener('resize', ()=>{ if(panelLift > maxLift()) apply(maxLift()); });
+})();
+
 // ── Panel collapse ────────────────────────────────────────────────────────────
 // panelOpen 已在渲染器初始化处声明(供 viewSize/layoutViewport 提前使用)
 function togglePanel(){
@@ -9725,15 +9849,28 @@ function monitorTiles(){
   t.push({ key:'live', name:'当前视角', live:true });
   return t;
 }
-// 网格布局：尽量接近正方形，最后一行不足就靠左排
+// 网格布局：每格锁 16:9（与主画面同比例，不会被拉扁），格与格之间留空，整体在可用区内居中。
+// 小窗不再严丝合缝拼满 —— 留白让六个画面各自成"一块屏"，也更像一面监控墙。
+const MON_TILE_AR = 16/9;   // 每格宽高比
+const MON_GAP     = 14;     // 格间距(px)
+const MON_INSET   = 0.94;   // 整面墙占可用区的比例，四周留一圈黑
 function monitorLayout(n, rect){
   const cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n/cols);
-  const gap = 4;
-  const cw = (rect.w - gap*(cols-1)) / cols, ch = (rect.h - gap*(rows-1)) / rows;
+  const availW = rect.w * MON_INSET, availH = rect.h * MON_INSET;
+  // 先按宽度算格宽，若算出的总高超了就改按高度反推 —— 保证 16:9 且整体装得下
+  let tw = (availW - MON_GAP*(cols-1)) / cols;
+  let th = tw / MON_TILE_AR;
+  if(th*rows + MON_GAP*(rows-1) > availH){
+    th = (availH - MON_GAP*(rows-1)) / rows;
+    tw = th * MON_TILE_AR;
+  }
+  tw = Math.floor(tw); th = Math.floor(th);
+  const gridW = tw*cols + MON_GAP*(cols-1), gridH = th*rows + MON_GAP*(rows-1);
+  const ox = rect.left + Math.round((rect.w - gridW)/2);
+  const oy = rect.top  + Math.round((rect.h - gridH)/2);
   return Array.from({length:n}, (_,i)=>{
     const c = i % cols, r = Math.floor(i/cols);
-    return { x: Math.round(rect.left + c*(cw+gap)), y: Math.round(rect.top + r*(ch+gap)),
-             w: Math.round(cw), h: Math.round(ch) };
+    return { x: ox + c*(tw+MON_GAP), y: oy + r*(th+MON_GAP), w: tw, h: th };
   });
 }
 // 重建 DOM 层（边框/标签/点击热区）。只在开启或画幅变化时调用。

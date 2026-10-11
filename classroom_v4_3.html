@@ -10186,6 +10186,56 @@ document.addEventListener('keydown', e=>{
 // 数据在文件末尾的 bakedData 数据块（bake/embed.py 生成，重新生成见 bake/run_all.sh）。
 // 加载完成(load)后异步解码；缺数据或解码失败 → 一切照旧（沿用程序化贴图、原补光灯）。
 // 开场封面此时正盖在画面上，换贴图/重编着色器的那一下用户看不到。
+// ==GI-PURE-BEGIN==  纯函数：不碰 DOM/WebGL，bake/tests/gi_runtime.test.mjs 直接抽出来单测
+const GI_GROUPS = ['SKY', 'CEIL', 'CORR_D', 'CORR_I', 'SUN_0', 'SUN_1', 'SUN_2', 'SUN_3', 'SUN_4', 'SUN_5', 'SUN_6', 'SUN_7', 'SUN_8'];
+function giDecodeLog(u8, scale) { return scale * (Math.pow(2, 8 * u8 / 255) - 1) / 255; }
+function giLayerCoord(y, L) {
+  if (y <= L[0]) return 0;
+  for (let i = 0; i < L.length - 1; i++) if (y < L[i + 1]) return i + (y - L[i]) / (L[i + 1] - L[i]);
+  return L.length - 1;
+}
+// 光线方向（太阳 → 场景）的水平方位：太阳恒在左窗外，光朝 +x（dir.x > 0）；沿窗墙(z)扫掠，
+// 角度滑块 a 越大太阳越往 +z → -dir.z 越大 → 方位角单调增加，跨正午也连续（不会在 ±π 处跳变）
+function giSunAzimuth(dir) { return Math.atan2(-dir[2], dir[0]); }
+function giSunKeyWeights(dir, keyDirs) {
+  const a = giSunAzimuth(dir), ks = keyDirs.map(giSunAzimuth), n = ks.length;
+  const w = new Array(n).fill(0);
+  if (a <= ks[0]) { w[0] = 1; return w; }
+  if (a >= ks[n - 1]) { w[n - 1] = 1; return w; }
+  for (let i = 0; i < n - 1; i++) {
+    if (a >= ks[i] && a <= ks[i + 1]) { const t = (a - ks[i]) / (ks[i + 1] - ks[i]); w[i] = 1 - t; w[i + 1] = t; return w; }
+  }
+  w[0] = 1; return w;
+}
+// 均匀天空亮度（烘焙 SKY 组的倍数）。曲线与时间轴里驱动半球光的那条一致（dayUp / skyLevel / warmK / moonGlow），
+// 天气：fill 抬高漫射、grey 向冷灰 (0.60,0.66,0.75) 靠拢——与 applyWeatherLighting 的 _wxGrey 同色。
+function giSkyRadiance(phase, wx) {
+  const DAWN = 0.10, DUSK = 0.90;
+  const dayUp = (phase > DAWN && phase < DUSK) ? Math.sin(Math.PI * (phase - DAWN) / (DUSK - DAWN)) : 0;
+  const dayLit = Math.min(1, dayUp * 3);
+  const skyLevel = Math.min(1, dayUp * 1.4);
+  const warmK = dayLit * Math.max(0, 1 - dayUp * 1.6);
+  const moonGlow = (1 - dayLit) * 0.05;
+  const I = Math.max(moonGlow, skyLevel * (0.22 + 0.46 * dayUp)) * wx.fill;
+  let r = 0.70 + warmK * 0.30, g = 0.82 - warmK * 0.06, b = 1.0 - warmK * 0.52;
+  const k = wx.grey;
+  r += (0.60 - r) * k; g += (0.66 - g) * k; b += (0.75 - b) * k;
+  return [r * I, g * I, b * I];
+}
+function giComputeWeights(st, keyDirs) {
+  const w = new Float32Array(GI_GROUPS.length * 3);
+  const set = (i, c, s) => { w[i * 3] = c[0] * s; w[i * 3 + 1] = c[1] * s; w[i * 3 + 2] = c[2] * s; };
+  set(0, st.sky, st.skyScale);
+  set(1, st.ceilColor, st.ceilI);
+  set(2, st.corrColor, st.camInCorridor ? 0 : st.corrI);    // 走廊里由实时走廊灯给直射，烘焙直射组让位
+  set(3, st.corrColor, st.corrI);
+  if (st.sunI > 0 && st.sunDir[1] < 0) {
+    const kw = giSunKeyWeights(st.sunDir, keyDirs);
+    for (let k = 0; k < kw.length; k++) if (kw[k]) set(4 + k, st.sunColor, st.sunI * kw[k]);
+  }
+  return w;
+}
+// ==GI-PURE-END==
 (() => {
   const GI = window.__GI = { status: 'pending', texStatus: 'pending', active: false };
 

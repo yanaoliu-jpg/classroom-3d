@@ -4971,9 +4971,6 @@ let panelOpen = true;
 // 监控墙开关。必须在这里声明：animate 循环(约 9200 行)和 layoutViewport 都早于监控墙那段代码执行，
 // 而 let/const 在声明前是暂时性死区 —— 连 typeof 都会抛，不像 var 那样返回 'undefined'。
 let monitorOn = false;
-// 当前时间预设（供烘焙 GI 的天光曲线取时刻）。必须在这里声明：applyPreset('morning') 在初始化阶段就会调用，
-// 而 let/const 在声明前是暂时性死区（typeof 也挡不住，本文件已因此踩过三次）。
-let giPresetKey = 'morning';
 // 时间轴条的净高(含上下留白)：打开时从可用区里扣掉这一条，画幅相应上移变小，
 // 时间轴就永远压不到画面上；关掉时画幅自动长回去。
 const TIMELINE_STRIP = 64;
@@ -8889,7 +8886,6 @@ descEl.style.cssText='position:fixed;top:68px;left:50%;transform:translateX(-50%
 document.body.appendChild(descEl);
 
 function applyPreset(k){
-  giPresetKey = k;
   const p=PRESETS[k];
   // BUGFIX：时间轴开着时，漂移逻辑每帧都会把三个窗光滑块写回成"当前时刻"的值，
   // 于是点预设看上去毫无反应（值瞬间被覆盖）。预设=定格的某个时刻，时间轴=连续推移，
@@ -8956,7 +8952,6 @@ function applyPreset(k){
   if(k!=='custom')setTimeout(()=>descEl.style.opacity='0',3500);
 }
 function markCustom(){
-  giPresetKey = 'custom';
   document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('on'));
   document.querySelector(`[onclick="applyPreset('custom')"]`)?.classList.add('on');  // 同 applyPreset：按钮可能被删，不让它抛错
 }
@@ -10334,8 +10329,8 @@ function giComputeWeights(st, keyDirs) {
 
   // ── 全局光照（GI）：探针体积，见 spec D1–D7 ─────────────────────────────────────────
   // 天光强度绝对尺度：giSkyRadiance 给出的是"半球光强度×颜色"，均匀天空亮度 L 与之相差 1/π（E=πL）。
-  // Task 8 校准（Cycles 参考图，晨/午 × 机位 5/7）：{0.5,1,2,4,8}/π 中 4/π 偏差最小（0.153）；
-  // 也与"窗外背景天空的线性亮度"同量级（午间约 2.4/π、晨昏更高），窗洞里看到的天和照进来的天光一致。
+  // Task 8 校准：与"窗外背景天空的线性亮度"同量级（折算均匀天空午间约 2.4/π、晨昏更高）→ 窗洞里看到的天和照进来的天光一致；
+  // 参考图扫描 {1,2,4,5.7,8}/π 的偏差几乎是平的（0.152–0.161，参考天空随被测尺度一起变），4/π 是平台最低点。见 spec 第 9 节。
   let GI_SKY_SCALE = 4 / Math.PI;
   const U = {
     giAtlas: { value: null }, giAtlasSize: { value: new THREE.Vector2(1, 1) }, giOn: { value: 0 },
@@ -10362,9 +10357,8 @@ int giVolumeAt( vec3 p ) {
   return -1;
 }
 vec3 giTex( vec4 R, vec3 C, float face, float iz, vec2 inTile ) {
-  float tile = face * C.z + iz;
-  float tx = mod( tile, R.z ), ty = floor( tile / R.z );
-  vec2 px = R.xy + vec2( tx * C.x, ty * C.y ) + inTile;
+  int tile = int( face ) * int( C.z ) + int( iz ), tpr = int( R.z );     // 整数运算：浮点 mod/除法在部分 GPU 上会差一格
+  vec2 px = R.xy + vec2( float( tile % tpr ) * C.x, float( tile / tpr ) * C.y ) + inTile;
   return texture2D( giAtlas, px / giAtlasSize ).rgb;
 }
 vec3 giIrradiance( int v, vec3 p, vec3 n ) {
@@ -10400,7 +10394,9 @@ if ( giOn > 0.5 ) {
 
   function giSnapshot() {
     const d = new THREE.Vector3().subVectors(mainLight.target.position, mainLight.position).normalize();
-    const phase = driftOn ? (driftT % 1) : (PRESET_SKY_PHASE[giPresetKey] ?? 0.34);
+    // 与窗外天空同一个相位：预设（applyPreset → updateSky）与时间轴（每帧 updateSky(dayPhase)）都维护它；
+    // 动灯光/太阳滑块只会 markCustom()，窗外天空不变 → 室内天光也不该变（终审修复）
+    const phase = skyPhase;
     const cc = corrLampLights[0].color;
     return {
       sky: giSkyRadiance(phase, { fill: wxFillMul, grey: wxHemiGrey }), skyScale: GI_SKY_SCALE,
@@ -10431,10 +10427,11 @@ if ( giOn > 0.5 ) {
       fragmentShader: /* glsl */`
         uniform sampler2D groups; uniform float scales[ G ]; uniform vec3 weights[ G ]; uniform vec2 cell; uniform float cols;
         void main() {
-          ivec2 p = ivec2( gl_FragCoord.xy );
+          ivec2 p = ivec2( gl_FragCoord.xy ), c = ivec2( cell );
+          int nc = int( cols );
           vec3 sum = vec3( 0.0 );
           for ( int g = 0; g < G; g ++ ) {
-            ivec2 o = ivec2( int( mod( float( g ), cols ) * cell.x ), int( floor( float( g ) / cols ) * cell.y ) );
+            ivec2 o = ivec2( ( g % nc ) * c.x, ( g / nc ) * c.y );
             vec3 e = texelFetch( groups, o + p, 0 ).rgb;
             sum += weights[ g ] * scales[ g ] * ( exp2( 8.0 * e ) - 1.0 ) / 255.0;     // 对数解码，与 gi_lib.decode_log 一致
           }
@@ -10483,7 +10480,8 @@ if ( giOn > 0.5 ) {
       Object.assign(shader.uniforms, U);                          // 同一组 uniform 对象：改一次，所有材质同步
       shader.fragmentShader = giPatchFragment(shader.fragmentShader);
     };
-    proto.customProgramCacheKey = function () { return GI.active ? 'gi1' : 'gi0'; };   // 否则会复用激活前的旧程序
+    // 否则会复用激活前的旧程序；后半段保留 three.js 默认键（钩子源码）——自带 onBeforeCompile 的材质才不会和普通材质共用程序
+    proto.customProgramCacheKey = function () { return (GI.active ? 'gi1|' : 'gi0|') + this.onBeforeCompile.toString(); };
     scene.traverse(o => {
       for (const m of (Array.isArray(o.material) ? o.material : [o.material])) if (m && m.isMeshStandardMaterial) m.needsUpdate = true;
     });
@@ -10505,7 +10503,10 @@ if ( giOn > 0.5 ) {
   }
   function warmUp() {
     try {
-      for (const inC of [true, false]) { applyCorridorLayer(inC); renderer.compile(scene, camera); }
+      // 与封面的 warmUpShaderVariants 相同：每种走廊状态 compile 之后还要经 composer 真渲染一帧。
+      // compile 不绑定渲染目标时编出的是"直出屏幕"（ACES + sRGB）的变体，composer 渲染进 HalfFloat 离屏目标用的是另一套；
+      // 若封面预热先于 GI 启动跑完，只 compile 会让第一次走进走廊现编 17 个程序（终审修复）
+      for (const inC of [true, false]) { applyCorridorLayer(inC); renderer.compile(scene, camera); composer.render(); }
       updateCorridorLightLayer(undefined);
     } catch (e) { console.warn('[GI] 预编译失败（不影响功能）', e); }
   }

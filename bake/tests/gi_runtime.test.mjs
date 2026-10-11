@@ -70,3 +70,17 @@ test('权重：走廊直射组在走廊里关闭；太阳为 0 或在地平线�
   assert.equal(sunSum(P.giComputeWeights({ ...base, sunDir: [0.5, 0.2, 0.0] }, keys)), 0);
   for (const x of w) assert.ok(Number.isFinite(x) && x >= 0);
 });
+
+// 终审：GLSL ES 允许除法有 2.5 ULP 误差，D3D（Windows 上的 ANGLE）常把 x/y 算成 x*rcp(y)。
+// 用浮点 mod/floor(x/y) 求图集格子坐标时，tpr=14/100 的整倍数会差一格（读到区域外/错一行 → 地面出现错光的横带）。
+// 这类误差在本机 GPU 上复现不了，只能锁住写法：格子坐标必须用整数运算。
+test('GI 图集与合成通道的格子寻址用整数运算（不依赖浮点除法精度）', () => {
+  const html = readFileSync(HTML, 'utf8');
+  const giTex = html.match(/vec3 giTex\([\s\S]*?\n\}/);
+  assert.ok(giTex, '找不到 giTex');
+  assert.ok(!/\bmod\s*\(/.test(giTex[0]) && !/floor\s*\(\s*tile\s*\//.test(giTex[0]), giTex[0]);
+  assert.match(giTex[0], /%/);
+  const comb = html.match(/uniform sampler2D groups;[\s\S]*?gl_FragColor/);
+  assert.ok(comb, '找不到合成着色器');
+  assert.ok(!/\bmod\s*\(/.test(comb[0]) && !/floor\s*\(\s*float\s*\(\s*g\s*\)\s*\//.test(comb[0]), comb[0]);
+});

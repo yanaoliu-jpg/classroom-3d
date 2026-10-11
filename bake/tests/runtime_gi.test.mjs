@@ -161,3 +161,76 @@ test('几何指纹：与当前几何一致时不警告；不一致时控制台�
     assert.ok(c.logs.some(l => l.startsWith('warning') && l.includes('烘焙数据与当前几何不一致')), c.logs.join('\n'));
   } finally { await c.close(); }
 });
+
+// ── 终审修复（final review）────────────────────────────────────────────────────────────
+const giSkyNow = 'Array.from(__GI.lastWeights.slice(0, 3))';
+async function assertSkyFollowsWindow(b, scale, label) {
+  await sleep(600);
+  const r = await b.evaluate(`({ w: ${giSkyNow}, e: giSkyRadiance(skyPhase, { fill: wxFillMul, grey: wxHemiGrey }).map(x => x * ${scale}), phase: skyPhase })`);
+  const tol = 2e-3 * Math.max(...r.e) + 1e-6;
+  r.w.forEach((v, i) => assert.ok(Math.abs(v - r.e[i]) <= tol, `${label}：GI 天光 ${r.w} ≠ 窗外天空相位 ${r.phase} 应有的 ${r.e}`));
+}
+
+test('GI 天光始终跟着窗外天空：开关灯/调滑块（自定义）、关掉时间轴都不跳', async () => {
+  const b = await open(HTML);
+  try {
+    const scale = (await b.evaluate('__GI.tune({})')).skyScale;
+    await b.evaluate(`applyPreset('night'); applyView(CAM_VIEWS['5']); true`); await sleep(1500);
+    const w0 = await b.evaluate(giSkyNow);
+    for (let i = 1; i <= 2; i++) {
+      await b.evaluate('elCeilOn.click(); true');                      // change → sync() + markCustom()
+      await assertSkyFollowsWindow(b, scale, `深夜第 ${i} 次开关吊顶灯`);
+    }
+    assert.deepEqual(await b.evaluate(giSkyNow), w0, '吊顶灯开了又关，天光权重应回到原值');
+    await b.evaluate(`applyPreset('noon'); true`); await sleep(800);
+    await b.evaluate('toggleDrift(); driftPlaying = false; driftT = 0.86; true'); await sleep(1200);
+    await assertSkyFollowsWindow(b, scale, '时间轴停在 0.86');
+    await b.evaluate('toggleDrift(); true');
+    await assertSkyFollowsWindow(b, scale, '关掉时间轴');
+  } finally { await b.close(); }
+});
+
+test('走进走廊不再编译新着色器——即使封面预热先于 GI 启动跑完', async () => {
+  const b = await launch();
+  try {
+    // 人为拖慢 GI 图集（PNG）解码 2.5s：封面的 idle 预热（≤1.5s）必然先跑完，只能靠 GI 自己的预热兜住
+    await b.send('Page.addScriptToEvaluateOnNewDocument', { source: `(() => {
+      const d = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+      Object.defineProperty(HTMLImageElement.prototype, 'src', { configurable: true, get() { return d.get.call(this); },
+        set(v) { if (String(v).startsWith('data:image/png')) setTimeout(() => d.set.call(this, v), 2500); else d.set.call(this, v); } });
+    })();` });
+    await b.goto(fileUrl(HTML));
+    await b.waitFor("window.__GI && __GI.status === 'active'", 60000);
+    await sleep(1500);
+    const n0 = await b.evaluate('renderer.info.programs.length');
+    await b.evaluate("applyView({fov:70, theta:Math.PI, phi:0.02, camR:0.6, panX:7.95, panZ:4.0, panY:0.1, name:'走廊'}); true");
+    await sleep(1500);
+    assert.equal(await b.evaluate('_corridorLayerOn'), true);
+    const n1 = await b.evaluate('renderer.info.programs.length');
+    await b.evaluate(`applyView(CAM_VIEWS['5']); true`); await sleep(1500);
+    const n2 = await b.evaluate('renderer.info.programs.length');
+    assert.ok(n1 <= n0 && n2 <= n0, `进出走廊新编译了着色器：${n0} → ${n1} → ${n2}`);
+  } finally { await b.close(); }
+});
+
+test('自带 onBeforeCompile 的材质不与普通材质共用着色器程序', async () => {
+  const b = await open(HTML);
+  try {
+    const r = await b.evaluate(`(() => {
+      const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+      const plain = new THREE.MeshStandardMaterial({ color: 0x808080 }), hooked = new THREE.MeshStandardMaterial({ color: 0x808080 });
+      hooked.onBeforeCompile = function (shader) {
+        THREE.MeshStandardMaterial.prototype.onBeforeCompile.call(this, shader);         // 项目记录里推荐的写法：先叠 GI 补丁
+        shader.fragmentShader = shader.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\\n  gl_FragColor.rgb *= 0.5;');
+      };
+      const a = new THREE.Mesh(geo, plain), c = new THREE.Mesh(geo, hooked);
+      a.position.set(0, 1, 0); c.position.set(0.3, 1, 0);
+      scene.add(a, c); renderer.compile(scene, camera);
+      const pa = renderer.properties.get(plain).currentProgram, pc = renderer.properties.get(hooked).currentProgram;
+      scene.remove(a, c);
+      return { both: !!pa && !!pc, same: pa === pc };
+    })()`);
+    assert.equal(r.both, true);
+    assert.equal(r.same, false, '自带钩子的材质复用了普通材质的程序，它的着色器改动会被悄悄丢掉');
+  } finally { await b.close(); }
+});

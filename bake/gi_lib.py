@@ -131,6 +131,27 @@ def fill_invalid_all(E, valid, vols):
         out[off:off + n] = g.reshape(n, 6, 3)
     return out
 
+def smooth_xz(E_grid, passes=1):
+    """水平方向（x、z）[1,4,1]/6 平滑，压蒙特卡洛噪声（白噪声标准差约减半）。
+    不在 y 方向平滑：非均匀层是故意贴着桌面/椅面分开的，混层会把桌肚的暗漏到桌面上。边界复制边缘值。"""
+    E = np.array(E_grid, np.float64, copy=True)
+    for _ in range(passes):
+        for axis in (0, 2):                                   # (nz, ny, nx, 6, 3) 的 z 轴与 x 轴
+            pad = [(0, 0)] * E.ndim; pad[axis] = (1, 1)
+            P = np.pad(E, pad, mode='edge')
+            sl = lambda a, b: tuple(slice(a, P.shape[axis] - b) if k == axis else slice(None) for k in range(E.ndim))
+            E = (P[sl(0, 2)] + 4.0 * P[sl(1, 1)] + P[sl(2, 0)]) / 6.0
+    return E
+
+def smooth_all(E, vols):
+    offs, _ = probe_offsets(vols)
+    ny = len(LAYERS)
+    out = np.array(E, np.float64, copy=True)
+    for v, off in zip(vols, offs):
+        n = v['nx'] * ny * v['nz']
+        out[off:off + n] = smooth_xz(E[off:off + n].reshape(v['nz'], ny, v['nx'], 6, 3)).reshape(n, 6, 3)
+    return out
+
 def ambient_cube(c6, n):
     n = np.asarray(n, np.float64)
     n2 = n * n

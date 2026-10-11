@@ -21,6 +21,11 @@ class TestExport(unittest.TestCase):
             self.assertGreater(k['dir'][0], 0)       # 太阳恒在左窗外(-x)，光朝 +x
         self.assertGreater(m['stats']['meshes'] + m['stats']['instances'], 500)
         self.assertEqual(set(m['views']), {'5', '6', '7', '9', '0'})
+        # 左墙三扇朝外的窗（Cycles 天光门户用）：中心 x=-7、z=0/4/8，3.3×2.6m，法线朝室内 +x
+        self.assertEqual([round(w['center'][2], 3) for w in m['windows']], [0.0, 4.0, 8.0])
+        for w in m['windows']:
+            self.assertAlmostEqual(w['center'][0], -7.0); self.assertEqual(w['normal'], [1, 0, 0])
+            self.assertAlmostEqual(w['w'], 3.3); self.assertAlmostEqual(w['h'], 2.6)
 
 if __name__ == '__main__':
     unittest.main()

@@ -3,3 +3,4 @@ vendor/node_modules/
 .DS_Store
 bake/out/
 bake/assets/
+__pycache__/

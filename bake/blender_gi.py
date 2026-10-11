@@ -13,7 +13,7 @@ def parse():
     argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
     p = argparse.ArgumentParser()
     p.add_argument('--quick', action='store_true')
-    p.add_argument('--samples', type=int, default=1024)
+    p.add_argument('--samples', type=int, default=4096)   # 关掉自适应后 1024 采样仍有 7–11% 探针噪声
     p.add_argument('--groups', default=','.join(G.GROUPS))
     return p.parse_args(argv)
 
@@ -42,6 +42,7 @@ def main():
         B.set_world((1, 1, 1), 0.0)
         if g == 'SKY':
             B.set_world((1, 1, 1), 1.0); passes = {'DIRECT', 'INDIRECT'}
+            for i, w in enumerate(meta.get('windows', [])): B.add_portal(w['center'], w['w'], w['h'], w['normal'], name=f'portal{i}')
         elif g == 'CEIL':
             for i, p in enumerate(meta['lights']['ceil']): B.add_point(p, 4 * math.pi, name=f'ceil{i}')
             passes = {'INDIRECT'}

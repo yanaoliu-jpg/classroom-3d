@@ -76,5 +76,19 @@ class TestAmbientCube(unittest.TestCase):
         n = np.array([1, 1, 0]) / np.sqrt(2)
         self.assertAlmostEqual(G.ambient_cube(c6, n)[0], 0.5 * 1 + 0.5 * 3)
 
+class TestSmooth(unittest.TestCase):
+    def test_smooth_xz_halves_noise_keeps_ramps_and_layers(self):
+        rng = np.random.default_rng(1)
+        nz, ny, nx = 40, 10, 30
+        base = np.linspace(1, 2, nx)[None, None, :, None, None] * np.ones((nz, ny, nx, 6, 3))
+        base[:, 3] *= 0.2                                   # 某一层整体更暗（桌肚层）：不能被垂直方向抹平
+        noisy = base * (1 + 0.1 * rng.standard_normal(base.shape))
+        sm = G.smooth_xz(noisy)
+        inner = (slice(2, -2), slice(None), slice(2, -2))
+        r0 = np.std((noisy / base)[inner]); r1 = np.std((sm / base)[inner])
+        self.assertLess(r1, 0.6 * r0)                       # 噪声至少降到 60%
+        self.assertTrue(np.allclose(G.smooth_xz(base)[inner], base[inner]))      # 线性渐变原样保留
+        self.assertAlmostEqual(float(sm[:, 3].mean() / sm[:, 4].mean()), 0.2, delta=0.01)   # 层与层之间不混
+
 if __name__ == '__main__':
     unittest.main()

@@ -19,7 +19,7 @@ def main(out=HERE / 'out'):
     cells, scales = [], []
     for g in groups:
         E = np.nan_to_num(np.maximum(np.load(raw / f'{g}.npy').astype(np.float64), 0.0))
-        E = G.fill_invalid_all(E, valid, vols)
+        E = G.smooth_all(G.fill_invalid_all(E, valid, vols), vols)   # 修补坏探针 → 水平平滑压噪
         A = G.pack_atlas(E, vols, layout)
         s = G.robust_scale(A)
         cells.append(G.encode_log(A, s)); scales.append(s)

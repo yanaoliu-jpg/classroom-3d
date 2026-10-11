@@ -15,8 +15,9 @@ if (!existsSync(iife)) { console.error('缺少 ' + iife + '，先运行 node bak
 const b = await launch();
 try {
   await b.goto(fileUrl(html));
-  // 新贴图换上之后再导出（反照率决定反弹光颜色）；没有烘焙数据接入段时 __GI 不存在，直接放行
-  await b.waitFor("!window.__GI || window.__GI.texStatus !== 'pending'");
+  // 新贴图换上、GI 启动完成之后再导出（反照率决定反弹光颜色；几何指纹要在与运行时比对时相同的稳定状态下算）；
+  // 没有烘焙数据接入段时 __GI 不存在，直接放行
+  await b.waitFor("!window.__GI || (window.__GI.texStatus !== 'pending' && window.__GI.status !== 'pending')");
   await b.evaluate(readFileSync(iife, 'utf8') + '; true');
   const meta = await b.evaluate(readFileSync(join(here, 'export_in_page.js'), 'utf8'));
   const parts = [];

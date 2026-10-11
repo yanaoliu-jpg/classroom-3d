@@ -58,6 +58,6 @@ def main():
         np.save(raw / f'{g}.npy', E.astype(np.float32))
     (raw / 'bake_info.json').write_text(json.dumps(dict(
         groups=groups, samples=samples, quick=a.quick, n_probes=int(len(centers)),
-        sunKeys=[k['dir'] for k in meta['sunKeys']]), ensure_ascii=False))
+        sunKeys=[k['dir'] for k in meta['sunKeys']], fingerprint=meta.get('fingerprint')), ensure_ascii=False))
 
 main()

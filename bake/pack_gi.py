@@ -27,7 +27,8 @@ def main(out=HERE / 'out'):
     big = G.tile_groups(cells, layout)
     Image.fromarray(big, 'RGB').save(out / 'gi_atlas.png', optimize=True)
     meta = G.runtime_meta(layout, vols, groups, scales, info['sunKeys'],
-                          extra=dict(samples=info['samples'], quick=info['quick'], invalid=int((~valid).sum())))
+                          extra=dict(samples=info['samples'], quick=info['quick'], invalid=int((~valid).sum()),
+                                     fingerprint=info.get('fingerprint')))   # 烘焙所用几何的指纹，运行时比对
     (out / 'gi.json').write_text(json.dumps(meta, ensure_ascii=False))
     print('gi_atlas.png', (out / 'gi_atlas.png').stat().st_size // 1024, 'KB', big.shape)
 

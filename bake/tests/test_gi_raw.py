@@ -23,6 +23,10 @@ class TestGiRaw(unittest.TestCase):
     def test_all_groups_present(self):
         self.assertEqual(self.info['groups'], G.GROUPS)
 
+    def test_bake_records_geometry_fingerprint(self):
+        meta = json.loads((RAW.parent / 'scene_meta.json').read_text())
+        self.assertEqual(self.info.get('fingerprint'), meta['fingerprint'])
+
     def test_sky_enters_through_left_windows(self):
         E = self.load('SKY'); C = self.C; mid = (C[:, 1] > 1.0) & (C[:, 1] < 2.1) & self.room & self.valid
         near = E[mid & (C[:, 0] < -5.0), 1].mean()     # -X 面：朝向窗户

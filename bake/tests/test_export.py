@@ -20,6 +20,7 @@ class TestExport(unittest.TestCase):
         self.assertAlmostEqual(m['lights']['ceilDistance'], 9.0)
         self.assertAlmostEqual(m['lights']['corrDistance'], 4.2)
         self.assertEqual((m['lights']['ceilDecay'], m['lights']['corrDecay']), (2, 2))
+        self.assertRegex(m['fingerprint'], r'^[0-9a-f]{8}$')        # 几何指纹：随烘焙数据一起进 HTML，运行时比对
         self.assertEqual([k['angle'] for k in m['sunKeys']], list(range(-80, 81, 20)))
         for k in m['sunKeys']:
             self.assertLess(k['dir'][1], 0)          # 光从上往下照

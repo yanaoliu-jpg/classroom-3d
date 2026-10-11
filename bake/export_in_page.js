@@ -84,5 +84,6 @@
     // 左墙朝外的窗洞（与左墙挖洞同一套常量）：Cycles 天光门户（portal）用，大幅降低室内天光烘焙噪声
     windows: winPositions.map(wz => ({ center: [-RW / 2, WIN_BOTTOM + WIN_H / 2, -RD / 2 + 6 + RD / 2 + wz], w: WIN_W, h: WIN_H, normal: [1, 0, 0] })),
     sunKeys, views,
+    fingerprint: window.__GI && window.__GI.fingerprint ? window.__GI.fingerprint() : null,   // 随烘焙数据进 HTML，加载时比对
   };
 })()

@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { launch, fileUrl } from '../cdp.mjs';
-import { HTML, noDataCopy, errorsIn } from './helpers.mjs';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { HTML, OUT, noDataCopy, errorsIn } from './helpers.mjs';
 
 const lightCount = `(() => { let n = 0; scene.traverse(o => { if (o.isLight) n++; }); return n; })()`;
 const meanLum = `(() => { renderer.render(scene, camera); const gl = renderer.getContext(); const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
@@ -139,4 +141,23 @@ test('GI 生效：关掉校准判定冗余的假效果，保留接触阴影与�
     await b.evaluate('__GI.tune({})');                     // 调参入口不能把已关掉的假效果"开"回来
     assert.deepEqual(await b.evaluate(fx), { glow: false, glass: 0, patch: false, floor: false, contact: 0.85, moon: true });
   } finally { await b.close(); }
+});
+
+test('几何指纹：与当前几何一致时不警告；不一致时控制台警告、GI 照常', async () => {
+  const b = await open(HTML);
+  try {
+    const fp = await b.evaluate('__GI.fingerprint()');
+    assert.match(fp, /^[0-9a-f]{8}$/);
+    assert.equal(await b.evaluate('BAKED.gi.meta.fingerprint'), fp);
+    assert.equal(await b.evaluate('!!__GI.stale'), false);
+    assert.ok(!b.logs.some(l => l.includes('烘焙数据与当前几何不一致')));
+  } finally { await b.close(); }
+  const stale = join(OUT, 'stale.html');
+  writeFileSync(stale, readFileSync(HTML, 'utf8').replace(/"fingerprint":"[0-9a-f]{8}"/, '"fingerprint":"00000000"'));
+  const c = await open(stale);
+  try {
+    assert.equal(await c.evaluate('__GI.status'), 'active');
+    assert.equal(await c.evaluate('__GI.stale'), true);
+    assert.ok(c.logs.some(l => l.startsWith('warning') && l.includes('烘焙数据与当前几何不一致')), c.logs.join('\n'));
+  } finally { await c.close(); }
 });

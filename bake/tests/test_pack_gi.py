@@ -17,7 +17,7 @@ class TestPackGi(unittest.TestCase):
                 np.save(raw / f'{g}.npy', E)
             np.save(raw / 'valid.npy', valid)
             (raw / 'bake_info.json').write_text(json.dumps(dict(groups=G.GROUPS, samples=8, quick=True, n_probes=n,
-                                                                sunKeys=[[1, -1, 0]] * 9)))
+                                                                sunKeys=[[1, -1, 0]] * 9, fingerprint='abcd1234')))
             pack_gi.main(out)
             meta = json.loads((out / 'gi.json').read_text())
             big = np.asarray(Image.open(out / 'gi_atlas.png').convert('RGB'))
@@ -30,6 +30,7 @@ class TestPackGi(unittest.TestCase):
                 self.assertAlmostEqual(float(v), gi + 1, delta=(gi + 1) * 0.03)   # 坏探针已被邻居填补，不是 1e6
             self.assertEqual(meta['groups'], G.GROUPS)
             self.assertEqual(meta['invalid'], 40)
+            self.assertEqual(meta['fingerprint'], 'abcd1234')
 
 if __name__ == '__main__':
     unittest.main()

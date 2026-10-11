@@ -97,9 +97,27 @@ def clear_lights():
     for o in [o for o in bpy.data.objects if o.type == 'LIGHT']:
         bpy.data.objects.remove(o, do_unlink=True)
 
-def add_point(pos_three, power, radius=0.05, color=(1, 1, 1), name='pt'):
+def _cutoff_window(L, R):
+    """three.js 点光源 distance=R 时在 1/d² 之外再乘 saturate(1-(d/R)^4)^2（r164 getDistanceAttenuation）。
+    Cycles 灯光着色器里 Light Path 的 Ray Length = 着色点到光源采样点的距离 → 用节点算同一窗函数乘到发光强度上。"""
+    L.use_nodes = True
+    nt = L.node_tree
+    em = next(n for n in nt.nodes if n.type == 'EMISSION')
+    lp = nt.nodes.new('ShaderNodeLightPath')
+    def op(kind, a, b, clamp=False):
+        m = nt.nodes.new('ShaderNodeMath'); m.operation = kind; m.use_clamp = clamp
+        for i, v in enumerate((a, b)):
+            if isinstance(v, (int, float)): m.inputs[i].default_value = v
+            else: nt.links.new(v, m.inputs[i])
+        return m.outputs[0]
+    x4 = op('POWER', op('DIVIDE', lp.outputs['Ray Length'], R), 4.0)
+    nt.links.new(op('POWER', op('SUBTRACT', 1.0, x4, clamp=True), 2.0), em.inputs['Strength'])
+
+def add_point(pos_three, power, radius=0.05, color=(1, 1, 1), name='pt', cutoff=None):
     L = bpy.data.lights.new(name, 'POINT')
     L.energy = power; L.shadow_soft_size = radius; L.color = color
+    if cutoff:
+        _cutoff_window(L, cutoff)
     o = bpy.data.objects.new(name, L)
     o.location = Vector(three_to_bl(pos_three).tolist())
     bpy.context.collection.objects.link(o)

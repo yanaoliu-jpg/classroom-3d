@@ -77,7 +77,10 @@
   return {
     stats, chunks: chunks.length, bytes: bytes.length,
     room: { RW, RD, RH, BACK_Z, CORR_X0, CORR_X1, CORR_Z0, CORR_Z1 },
-    lights: { ceil: fluoroLights.map(wp), corr: corrLampLights.map(wp) },
+    lights: { ceil: fluoroLights.map(wp), corr: corrLampLights.map(wp),
+              // three.js 截断距离/衰减：Cycles 侧 add_point(cutoff=…) 复现同一窗函数
+              ceilDistance: fluoroLights[0].distance, ceilDecay: fluoroLights[0].decay,
+              corrDistance: corrLampLights[0].distance, corrDecay: corrLampLights[0].decay },
     // 左墙朝外的窗洞（与左墙挖洞同一套常量）：Cycles 天光门户（portal）用，大幅降低室内天光烘焙噪声
     windows: winPositions.map(wz => ({ center: [-RW / 2, WIN_BOTTOM + WIN_H / 2, -RD / 2 + 6 + RD / 2 + wz], w: WIN_W, h: WIN_H, normal: [1, 0, 0] })),
     sunKeys, views,

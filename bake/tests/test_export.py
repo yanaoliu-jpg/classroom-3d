@@ -15,6 +15,11 @@ class TestExport(unittest.TestCase):
         m = json.loads((OUT / 'scene_meta.json').read_text())
         self.assertEqual(len(m['lights']['ceil']), 12)
         self.assertEqual(len(m['lights']['corr']), 8)
+        # 实时点光源的截断距离/衰减指数（three.js distance/decay）：Cycles 侧用同一窗函数（add_point cutoff），
+        # 烘焙的间接光与 CORR_D 直射才与实时直射一致；窗函数仿真只对 decay=2（= Cycles 的平方反比）成立
+        self.assertAlmostEqual(m['lights']['ceilDistance'], 9.0)
+        self.assertAlmostEqual(m['lights']['corrDistance'], 4.2)
+        self.assertEqual((m['lights']['ceilDecay'], m['lights']['corrDecay']), (2, 2))
         self.assertEqual([k['angle'] for k in m['sunKeys']], list(range(-80, 81, 20)))
         for k in m['sunKeys']:
             self.assertLess(k['dir'][1], 0)          # 光从上往下照

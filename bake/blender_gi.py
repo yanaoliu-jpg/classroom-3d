@@ -44,10 +44,10 @@ def main():
             B.set_world((1, 1, 1), 1.0); passes = {'DIRECT', 'INDIRECT'}
             for i, w in enumerate(meta.get('windows', [])): B.add_portal(w['center'], w['w'], w['h'], w['normal'], name=f'portal{i}')
         elif g == 'CEIL':
-            for i, p in enumerate(meta['lights']['ceil']): B.add_point(p, 4 * math.pi, name=f'ceil{i}')
+            for i, p in enumerate(meta['lights']['ceil']): B.add_point(p, 4 * math.pi, name=f'ceil{i}', cutoff=meta['lights']['ceilDistance'])
             passes = {'INDIRECT'}
         elif g in ('CORR_D', 'CORR_I'):
-            for i, p in enumerate(meta['lights']['corr']): B.add_point(p, 4 * math.pi, name=f'corr{i}')
+            for i, p in enumerate(meta['lights']['corr']): B.add_point(p, 4 * math.pi, name=f'corr{i}', cutoff=meta['lights']['corrDistance'])
             passes = {'DIRECT'} if g == 'CORR_D' else {'INDIRECT'}
         elif g.startswith('SUN_'):
             B.add_sun(meta['sunKeys'][int(g[4:])]['dir']); passes = {'INDIRECT'}

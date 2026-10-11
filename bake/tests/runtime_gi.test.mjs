@@ -96,3 +96,47 @@ test('进出走廊切换走廊直射组', async () => {
     assert.deepEqual(errorsIn(b.logs), []);
   } finally { await b.close(); }
 });
+
+test('__GI.tune 改天光尺度并逐项关假效果（校准入口）', async () => {
+  const b = await open(HTML);
+  try {
+    await b.evaluate(`applyPreset('noon'); applyView(CAM_VIEWS['5']); true`);
+    await sleep(1500);
+    const w0 = await b.evaluate('Array.from(__GI.lastWeights.slice(0, 3))');
+    const s0 = (await b.evaluate('__GI.tune({})')).skyScale;          // 当前（校准后的）默认尺度
+    const r = await b.evaluate(`__GI.tune({ skyScale: ${4 * s0}, fluoroGlow: 0, winPatch: 0, floorFx: 0 })`);
+    assert.ok(Math.abs(r.skyScale - 4 * s0) < 1e-9);
+    await sleep(500);                                       // 下一帧 GI.update 按新尺度重新合成
+    const w1 = await b.evaluate('Array.from(__GI.lastWeights.slice(0, 3))');
+    w1.forEach((v, i) => assert.ok(Math.abs(v / w0[i] - 4) < 1e-3, `天光权重应 ×4：${w0} → ${w1}`));
+    assert.equal(await b.evaluate('fluoroGlows.some(g => g.visible) || winPatches.some(p => p.visible) || floorMirror.visible'), false);
+    assert.deepEqual(errorsIn(b.logs), []);
+  } finally { await b.close(); }
+});
+
+test('__GI.tune 关了再开，恢复页面自己的可见性（地面光斑创建时即隐藏，不能被"开"出来）', async () => {
+  const b = await open(HTML);
+  try {
+    const vis = '[...fluoroGlows, ...winPatches, ...winShafts, floorMirror, floorHighlight, moonLight].map(o => o.visible)';
+    const v0 = await b.evaluate(vis);
+    assert.ok(v0.includes(false), '前提：页面里有被隐藏的假效果对象');
+    await b.evaluate('__GI.tune({ fluoroGlow: 0, moon: 0, winPatch: 0, floorFx: 0 })');
+    await b.evaluate('__GI.tune({ fluoroGlow: 1, moon: 1, winPatch: 1, floorFx: 1 })');
+    assert.deepEqual(await b.evaluate(vis), v0);
+  } finally { await b.close(); }
+});
+
+test('GI 生效：关掉校准判定冗余的假效果，保留接触阴影与月光；缺数据时原样', async () => {
+  const fx = `({ glow: fluoroGlows.some(g => g.visible), glass: corrLeak.glass.max, patch: winPatches.some(p => p.visible),
+    floor: floorMirror.visible || floorHighlight.visible, contact: contactMat.opacity, moon: !!moonLight.parent && moonLight.visible })`;
+  const ref = await open(noDataCopy());
+  try {
+    assert.deepEqual(await ref.evaluate(fx), { glow: true, glass: 0.35, patch: true, floor: true, contact: 0.85, moon: true });
+  } finally { await ref.close(); }
+  const b = await open(HTML);
+  try {
+    assert.deepEqual(await b.evaluate(fx), { glow: false, glass: 0, patch: false, floor: false, contact: 0.85, moon: true });
+    await b.evaluate('__GI.tune({})');                     // 调参入口不能把已关掉的假效果"开"回来
+    assert.deepEqual(await b.evaluate(fx), { glow: false, glass: 0, patch: false, floor: false, contact: 0.85, moon: true });
+  } finally { await b.close(); }
+});

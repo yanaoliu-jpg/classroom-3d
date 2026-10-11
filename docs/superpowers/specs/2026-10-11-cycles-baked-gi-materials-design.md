@@ -114,7 +114,7 @@ classroom_v4_3.html
    │                      注入 GLTFExporter IIFE（vendor 里 esbuild 打包，只存在于工具中）
    ▼
 bake/out/scene.glb + scene_meta.json   （真实几何 + 灯位/窗洞/机位/分组元数据）
-   │ ② blender_textures.py  程序化材质 + Poly Haven 原图 → 四方连续 WebP
+   │ ② blender_floor.py + tex_lib.py / pack_textures.py  倒角瓷砖法线/AO + 程序化材质 + Poly Haven 原图 → 四方连续 WebP
    │ ③ blender_gi.py        导入 → 材质/灯光分组 → 探针 → 逐组 Cycles 烘焙 → 坏探针修补 → 编码
    │ ④ blender_reference.py 同机位同灯光 Cycles 参考图（校准用）
    ▼
@@ -193,7 +193,8 @@ Points/Sprite/Line、不可见对象、透明度 < 0.5 的玻璃；`InstancedMes
 ## 7. 文件清单
 
 - 新增 `bake/`：`run_all.sh`、`export_scene.mjs`、`exporter-entry.mjs`（打包 GLTFExporter）、`blender_common.py`、
-  `blender_textures.py`、`blender_gi.py`、`blender_reference.py`、`embed.py`、`README.md`
+  `blender_floor.py`、`tex_lib.py`、`pack_textures.py`、`fetch_polyhaven.py`、`gi_lib.py`、`blender_gi.py`、`pack_gi.py`、
+  `blender_reference.py`、`capture_views.mjs`、`compare.py`、`bench.mjs`、`embed.py`、`README.md`（实际文件，见 `bake/README.md`）
 - `bake/out/`、`bake/assets/polyhaven/`（原始下载）加入 `.gitignore`
 - 修改 `classroom_v4_3.html`：贴图接入、GI 解码/合成/着色器补丁、权重接线、拆灯、末尾数据块
 - 更新 `项目记录.md`、`性能优化计划.md`

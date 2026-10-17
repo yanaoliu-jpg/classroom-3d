@@ -153,7 +153,8 @@ canvas{display:block;position:absolute;top:0;left:0;border-radius:12px;}
   pointer-events:none;font-variant-numeric:tabular-nums;backdrop-filter:var(--blur);
 }
 /* 方位罗盘（右下角）：盘面随相机朝向旋转，屏幕上方=当前面朝方向；北=-Z 红色 */
-#compass{position:fixed;right:22px;bottom:calc(var(--panel-h) + 18px);transition:bottom .35s var(--ease);width:52px;height:52px;border-radius:50%;border:1px solid var(--line);background:var(--chip-bg);backdrop-filter:var(--blur);z-index:11;pointer-events:none;}
+#compass{position:fixed;right:22px;bottom:calc(var(--panel-h) + 18px);transition:bottom .35s var(--ease);width:52px;height:52px;border-radius:50%;border:1px solid var(--line);background:var(--chip-bg);backdrop-filter:var(--blur);z-index:11;cursor:pointer;}
+#compass:hover{border-color:var(--amber-line);}
 #compassRose{position:absolute;inset:0;font-family:monospace;font-size:10px;font-weight:700;color:var(--t3);transition:transform .12s linear;}
 #compassRose b{position:absolute;}
 #compassRose .cn{top:2px;left:50%;transform:translateX(-50%);color:#e0574a;}
@@ -537,7 +538,7 @@ button.cv-go:focus-visible{ outline:2px solid var(--amber-soft); outline-offset:
 <div class="hint-btm" id="hint">拖动旋转视角 · 拖动光球移动光源 · 滚轮缩放 · WASD 漫游 · T 时间轴 · M 监控墙 · F 全屏 · Tab 收面板</div>
 <div id="timeDisplay"></div>
 <div id="fpsMeter">-- FPS</div>
-<div id="compass" title="方位罗盘：屏幕上方=你面朝的方向"><div id="compassRose"><b class="cn">N</b><b class="ce">E</b><b class="cs">S</b><b class="cw">W</b></div></div>
+<div id="compass" title="方位罗盘：屏幕上方=你面朝的方向 · 点一下归正视角（L）"><div id="compassRose"><b class="cn">N</b><b class="ce">E</b><b class="cs">S</b><b class="cw">W</b></div></div>
 
 <!-- 收起/展开手柄：必须是 #panel 的兄弟节点(不能放进 #panel 内)——#panel 收起时用 transform:translateY(100%)，
      transform 会成为其内 position:fixed 子元素的包含块，若手柄在里面会随面板一起滑出屏幕外 → 收起后无法再点开。 -->
@@ -586,14 +587,14 @@ button.cv-go:focus-visible{ outline:2px solid var(--amber-soft); outline-offset:
       <div class="ptitle">🖼 画幅 · Frame</div>
       <div class="q-cap">比例</div>
       <div class="aspect-row" style="flex-wrap:wrap;gap:5px">
-        <button class="aspect-btn ar-btn"    data-ar="full" onclick="setAspect('full')">铺满</button>
-        <button class="aspect-btn ar-btn on" data-ar="1.7778" onclick="setAspect('1.7778')">16:9</button>
+        <button class="aspect-btn ar-btn on" data-ar="full" onclick="setAspect('full')">铺满</button>
+        <button class="aspect-btn ar-btn"    data-ar="1.7778" onclick="setAspect('1.7778')">16:9</button>
         <button class="aspect-btn ar-btn"    data-ar="2.3333" onclick="setAspect('2.3333')">21:9</button>
         <button class="aspect-btn ar-btn"    data-ar="2.35" onclick="setAspect('2.35')">2.35:1</button>
         <button class="aspect-btn ar-btn"    data-ar="1.3333" onclick="setAspect('1.3333')">4:3</button>
       </div>
       <div class="q-cap" style="margin-top:9px">画面大小 · 拖到 100% 即顶满</div>
-      <div class="row"><label>大小</label><input type="range" class="g" id="frameFill" min="0.55" max="1" value="0.94" step="0.01" data-nosync><span class="val" id="frameFillv">94%</span></div>
+      <div class="row"><label>大小</label><input type="range" class="g" id="frameFill" min="0.55" max="1" value="1" step="0.01" data-nosync><span class="val" id="frameFillv">100%</span></div>
       <div class="q-cap" style="opacity:.62">F 键 = 浏览器全屏 · Tab 收起面板可再大一圈</div>
       <div class="q-cap" style="margin-top:7px;opacity:.62">画面下沿那条横杠可上下拖：选「铺满」时拖动＝改变取景宽窄（越矮越广角），锁死比例时＝只改大小。双击复位。</div>
     </div>
@@ -606,6 +607,7 @@ button.cv-go:focus-visible{ outline:2px solid var(--amber-soft); outline-offset:
         <div class="key-row"><kbd>7</kbd><span>后→前 广角</span></div>
         <div class="key-row"><kbd>9</kbd><span>侧窗全景</span></div>
         <div class="key-row"><kbd>0</kbd><span>教室外观</span></div>
+        <div class="key-row"><kbd>L</kbd><span>归正视角（点罗盘同效）</span></div>
       </div>
       <div class="q-cap" style="margin-top:9px;opacity:.62">数字键直接切 · <kbd>M</kbd> 监控墙可同时看全部</div>
     </div>
@@ -4993,16 +4995,16 @@ function viewSize(){
   const full = Math.max(1, innerHeight - ph - th);          // 面板/时间轴之上的全部空间
   return { w: innerWidth, h: Math.max(MIN_VIEW_H, full - panelLift), full };
 }
-// 画幅：把渲染矩形约束成所选比例(16:9 默认 / 2.35 / 21:9 / 4:3)，在可用区内居中，
+// 画幅：把渲染矩形约束成所选比例(16:9 / 2.35 / 21:9 / 4:3)，在可用区内居中，
 // 四周露出的黑色 body 即上下(letterbox)或左右(pillarbox)黑边。
 // 画幅比例：0 = 不锁比例(铺满可用区)；否则锁成该宽高比，多出来的部分留黑边。
-// 由 ⚙设置 → 画幅 里的比例按钮写入（setAspect）。
-let frameAspect = 16/9;
+// 由 ⚙设置 → 画幅 里的比例按钮写入（setAspect）。开场默认「铺满」（0）：画面顶满可用区、没有黑边。
+let frameAspect = 0;
 // 画面占可用区的比例：<1 → 画幅四周留一圈黑边（画框感）；1 = 顶到边。
 // 原值 0.88 同时兼着"少渲染 23% 像素"的提帧任务；现在片元成本已降到原来的 1/5（见顶部
 // makeSpotLightsDiffuseOnly / LAYER_CORRIDOR），不必再拿画面大小换帧率。
-// 由 ⚙设置 → 画幅 里的「画面大小」滑块写入（setFrameFill）；默认 0.94。
-let FRAME_FILL = 0.94;
+// 由 ⚙设置 → 画幅 里的「画面大小」滑块写入（setFrameFill）；默认 1（配合开场「铺满」）。
+let FRAME_FILL = 1;
 function frameRect(){
   const av = viewSize();
   const aw = Math.max(1, Math.round(av.w * FRAME_FILL));   // 内缩后的可用区
@@ -5126,6 +5128,37 @@ function updateCam(){
   camera.lookAt(panX, 1.2 + panY, panZ);
   updateCorridorLightLayer();
 }
+
+// ── 归正（L 键 / 点右下角罗盘）：人不动，视线放平、朝向转到最近的正对墙方向，0.35 秒平滑过渡 ──
+// 轨道相机：位置 = 注视点 + camR·(sinθcosφ, sinφ, cosθcosφ)，且比注视点高 0.3（见 updateCam 的 1.5 与 1.2）。
+// 视线水平 ⇔ camR·sinφ + 0.3 = 0；θ 取 π/2 的整数倍 = 正对墙面。每一帧都按"相机位置不动"反推注视点，
+// 所以过渡全程是原地转头，不会平移。期间拖拽/滚轮/WASD 会取消过渡。
+let _levelAnim = 0;
+function levelView(){
+  const P = camera.position.clone();
+  const th0 = theta, ph0 = phi;
+  const th1 = Math.round(theta / (Math.PI / 2)) * (Math.PI / 2);          // 与当前朝向相差 ≤45° → 自然走近路
+  const ph1 = Math.asin(Math.max(-1, Math.min(1, -0.3 / camR)));
+  const place = (th, ph) => {
+    theta = th; phi = ph;
+    panX = P.x - camR * Math.sin(th) * Math.cos(ph);
+    panY = P.y - camR * Math.sin(ph) - 1.5;
+    panZ = P.z - camR * Math.cos(th) * Math.cos(ph);
+    updateCam();
+  };
+  const id = ++_levelAnim, t0 = performance.now(), D = 350;
+  const step = now => {
+    if(id !== _levelAnim) return;
+    if(moveKeys.w||moveKeys.a||moveKeys.s||moveKeys.d||moveKeys.q||moveKeys.e){ _levelAnim++; return; }
+    const k = Math.min(1, (now - t0) / D), e = k < 0.5 ? 4*k*k*k : 1 - Math.pow(-2*k + 2, 3) / 2;   // easeInOutCubic
+    place(th0 + (th1 - th0) * e, ph0 + (ph1 - ph0) * e);
+    if(k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+renderer.domElement.addEventListener('pointerdown', ()=>{ _levelAnim++; });
+renderer.domElement.addEventListener('wheel', ()=>{ _levelAnim++; }, {passive:true});
+document.getElementById('compass')?.addEventListener('click', levelView);
 
 // ── 层开关：相机跨过右墙进出走廊时，把两侧各自用不到的那组灯整体摘掉/装回 ──────────
 // 右墙内表面在 x=RW/2=7，走廊在它外侧(x≈7~8.9)。阈值带 6.4 / 7.0 做迟滞：
@@ -9163,11 +9196,15 @@ const grainCv  = document.getElementById('grainCanvas');
 const grainCtx = grainCv.getContext('2d');
 
 const GRAIN_SCALE = 0.45; // low-res source, upscaled with smoothing for film look
+// 暗角最深处（四角）的不透明度：四边约 6%、四角约 22%（亮度 94% / 78%）。
+// 必须与 grainCv 同处声明：resizeGrain() 在下面立即调用、会画暗角，晚声明就是暂时性死区。
+const VIGNETTE_MAX = 0.22;
 
 function resizeGrain(){
   const {w,h}=frameRect();
   grainCv.width  = Math.floor(w * GRAIN_SCALE);
   grainCv.height = Math.floor(h * GRAIN_SCALE);
+  drawGrain();      // 改尺寸会清空画布；暗角是静态的，只在这里重画（不再逐帧画）
 }
 resizeGrain();
 
@@ -9231,21 +9268,23 @@ function drawGrain(){
   grainCtx.clearRect(0, 0, gw, gh);
 
   // ── Vignette only ────────────────────────────────────────────────────
-  // 颗粒噪点与闪点已移除，仅保留暗角以聚焦光影、突出明暗对比。
-  const vgrd = grainCtx.createRadialGradient(
-    gw * 0.5, gh * 0.5, gh * 0.15,
-    gw * 0.5, gh * 0.5, gh * 0.85
-  );
-  vgrd.addColorStop(0,   'rgba(0,0,0,0)');
-  vgrd.addColorStop(0.55,'rgba(0,0,0,0)');
-  vgrd.addColorStop(1,   'rgba(0,0,0,0.58)');
+  // 颗粒噪点与闪点已移除，仅保留一层柔和暗角。
+  // 旧版按画面高度画圆形渐变、边缘不透明度 0.58：左右两侧与四角只剩 42% 亮度，画幅越宽压得越多。
+  // 现在在"半宽/半高 = 1"的归一坐标里画圆 → 与画幅同比例的椭圆：四边对称，换宽画幅也不加重；
+  // 强度沿 smoothstep(0.75, 1.45) 缓升，画面中央 3/4 完全不压暗。
+  grainCtx.setTransform(gw / 2, 0, 0, gh / 2, gw / 2, gh / 2);
+  const vgrd = grainCtx.createRadialGradient(0, 0, 0.75, 0, 0, 1.45);
+  for (let i = 0; i <= 8; i++) {
+    const k = i / 8;
+    vgrd.addColorStop(k, `rgba(0,0,0,${(VIGNETTE_MAX * k * k * (3 - 2 * k)).toFixed(4)})`);
+  }
   grainCtx.fillStyle = vgrd;
-  grainCtx.fillRect(0, 0, gw, gh);
+  grainCtx.fillRect(-1, -1, 2, 2);
+  grainCtx.setTransform(1, 0, 0, 1, 0, 0);
 }
 
 
 const clock=new THREE.Clock();
-let grainFrame = 0;
 // 收集场景中所有 PBR 材质，供"真实黑暗"门控统一调节 envMapIntensity（IBL 漫射/反射）。
 // 一次性遍历（此时所有网面已加入场景），之后每帧只改强度、不再遍历。
 const pbrMats = [];
@@ -9646,8 +9685,6 @@ if(driftOn){
   const dustTarget = Math.min(1, mainLight.intensity / 0.6) * 0.6; // 1.05→0.6：粒子变大后降低亮度，避免发白过曝放大残余闪烁
   dustMat.opacity += (dustTarget - dustMat.opacity) * 0.05;
   updateSunBeams(); // 体积阳光光束：柱状 billboard 朝相机 + 低太阳才显著
-  grainFrame = (grainFrame + 1) % 3;
-  if(grainFrame === 0) drawGrain();
 
   // （动态分辨率已删除：转动时降分辨率＝用模糊补帧，本项目不采用。分辨率全程恒为清晰度档位。）
 
@@ -9808,6 +9845,7 @@ document.addEventListener('keydown', e=>{
   if(e.key==='t'||e.key==='T'){ toggleDrift(); }                  // T 开关时间轴（日光推移）
   if(e.key==='f'||e.key==='F'){ toggleFullscreen(); }             // F 浏览器全屏
   if(e.key==='m'||e.key==='M'){ toggleMonitor(); }                // M 监控墙（所有机位平铺）
+  if(e.key==='l'||e.key==='L'){ levelView(); }                    // L 归正视角（点罗盘同效）
   if(e.key==='Escape' && settingsOpen){ toggleSettings(false); }  // Esc 关闭设置浮层
   if(e.key==='1') applyPreset('morning');
   if(e.key==='2') applyPreset('noon');
@@ -10506,7 +10544,17 @@ if ( giOn > 0.5 ) {
       // 与封面的 warmUpShaderVariants 相同：每种走廊状态 compile 之后还要经 composer 真渲染一帧。
       // compile 不绑定渲染目标时编出的是"直出屏幕"（ACES + sRGB）的变体，composer 渲染进 HalfFloat 离屏目标用的是另一套；
       // 若封面预热先于 GI 启动跑完，只 compile 会让第一次走进走廊现编 17 个程序（终审修复）
-      for (const inC of [true, false]) { applyCorridorLayer(inC); renderer.compile(scene, camera); composer.render(); }
+      // 另外绑定 composer 的离屏目标再 compile 一遍：compile 不看视野，这样视野外的物体也编好"离屏"变体
+      // （否则开场机位看不到的物体第一次进入视野时还会现编；不绑定的那遍留给直出屏幕的监控墙）
+      for (const inC of [true, false]) {
+        applyCorridorLayer(inC);
+        renderer.compile(scene, camera);
+        const prevRT = renderer.getRenderTarget();
+        renderer.setRenderTarget(composer.renderTarget1);
+        renderer.compile(scene, camera);
+        renderer.setRenderTarget(prevRT);
+        composer.render();
+      }
       updateCorridorLightLayer(undefined);
     } catch (e) { console.warn('[GI] 预编译失败（不影响功能）', e); }
   }
